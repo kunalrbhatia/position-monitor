@@ -95,8 +95,9 @@ class PositionStore {
           } else {
             this.positions.delete(position.positionId);
           }
-        } catch (err: any) {
-          notifyAlert(`[PositionStore] Error loading position file ${file}: ${err.message}`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          notifyAlert(`[PositionStore] Error loading position file ${file}: ${message}`);
         }
       }
     }
@@ -144,9 +145,10 @@ class PositionStore {
     let margin: number;
     try {
       margin = await getMargin(jwtToken);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       for (const pos of openPositionsWithoutBaseline) {
-        notifyAlert(`[${pos.positionId}] Margin fetch failed: ${err.message}`);
+        notifyAlert(`[${pos.positionId}] Margin fetch failed: ${message}`);
       }
       return;
     }
@@ -159,10 +161,9 @@ class PositionStore {
         notifyAlert(
           `baselineValue backfilled for ${pos.positionId} = ₹${margin} (from RMS margin)`,
         );
-      } catch (err: any) {
-        notifyAlert(
-          `[${pos.positionId}] Failed to persist backfilled baselineValue: ${err.message}`,
-        );
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        notifyAlert(`[${pos.positionId}] Failed to persist backfilled baselineValue: ${message}`);
       }
     }
   }

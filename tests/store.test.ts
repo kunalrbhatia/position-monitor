@@ -34,8 +34,8 @@ describe('PositionStore backfillBaselineValues Unit Tests', () => {
 
     positionStore.setPosition(posWithoutBaseline);
 
-    const getBrokerSessionToken = jest.fn<any>().mockResolvedValue('valid_mock_jwt');
-    const fetchMarginUtilized = jest.fn<any>().mockResolvedValue(150000.5);
+    const getBrokerSessionToken = jest.fn().mockResolvedValue('valid_mock_jwt');
+    const fetchMarginUtilized = jest.fn().mockResolvedValue(150000.5);
 
     await positionStore.backfillBaselineValues(tempDir, getBrokerSessionToken, fetchMarginUtilized);
 
@@ -58,8 +58,8 @@ describe('PositionStore backfillBaselineValues Unit Tests', () => {
 
     positionStore.setPosition(posWithoutBaseline);
 
-    const getBrokerSessionToken = jest.fn<any>().mockResolvedValue(null);
-    const fetchMarginUtilized = jest.fn<any>();
+    const getBrokerSessionToken = jest.fn().mockResolvedValue(null);
+    const fetchMarginUtilized = jest.fn();
 
     await positionStore.backfillBaselineValues(tempDir, getBrokerSessionToken, fetchMarginUtilized);
 
@@ -79,10 +79,8 @@ describe('PositionStore backfillBaselineValues Unit Tests', () => {
 
     positionStore.setPosition(posWithoutBaseline);
 
-    const getBrokerSessionToken = jest.fn<any>().mockResolvedValue('valid_jwt');
-    const fetchMarginUtilized = jest
-      .fn<any>()
-      .mockRejectedValue(new Error('Broker API maintenance'));
+    const getBrokerSessionToken = jest.fn().mockResolvedValue('valid_jwt');
+    const fetchMarginUtilized = jest.fn().mockRejectedValue(new Error('Broker API maintenance'));
 
     await positionStore.backfillBaselineValues(tempDir, getBrokerSessionToken, fetchMarginUtilized);
 

@@ -25,7 +25,7 @@ describe('Thresholds Unit Tests', () => {
   });
 
   test('blocks checks and alerts when baselineValue is missing or invalid', () => {
-    expect(checkThresholds('pos1', undefined as any, 5000)).toEqual({ breached: false });
+    expect(checkThresholds('pos1', undefined, 5000)).toEqual({ breached: false });
     expect(checkThresholds('pos1', 0, 5000)).toEqual({ breached: false });
     expect(checkThresholds('pos1', -100, 5000)).toEqual({ breached: false });
   });

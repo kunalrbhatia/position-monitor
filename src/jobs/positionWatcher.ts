@@ -11,8 +11,9 @@ export async function runPositionWatcher(): Promise<void> {
   try {
     positionStore.loadPositionsFromDir(env.POSITIONS_DIR);
     await positionStore.backfillBaselineValues(env.POSITIONS_DIR);
-  } catch (err: any) {
-    notifyAlert(`[positionWatcher] Error scanning directory: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    notifyAlert(`[positionWatcher] Error scanning directory: ${message}`);
   }
 }
 

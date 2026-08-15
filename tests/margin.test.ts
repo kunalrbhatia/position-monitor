@@ -9,7 +9,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
   test('successfully returns parsed margin utilized number', async () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
-        get: jest.fn<any>().mockResolvedValue({
+        get: jest.fn().mockResolvedValue({
           data: {
             status: true,
             message: 'SUCCESS',
@@ -29,7 +29,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
   test('throws error on non-true status from broker', async () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
-        get: jest.fn<any>().mockResolvedValue({
+        get: jest.fn().mockResolvedValue({
           data: {
             status: false,
             message: 'Invalid token',
@@ -45,7 +45,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
   test('throws error when utiliseddebits is invalid or NaN', async () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
-        get: jest.fn<any>().mockResolvedValue({
+        get: jest.fn().mockResolvedValue({
           data: {
             status: true,
             data: {
@@ -65,7 +65,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
   test('throws error on network or HTTP failure', async () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
-        get: jest.fn<any>().mockRejectedValue(new Error('Network Error')),
+        get: jest.fn().mockRejectedValue(new Error('Network Error')),
       },
     }));
 

@@ -16,8 +16,7 @@ describe('Jobs & Integration Coverage Tests', () => {
   const tempLogs = path.join(process.cwd(), 'temp_test_logs');
 
   beforeAll(() => {
-    (env as any).POSITIONS_DIR = tempDir;
-    (env as any).MTM_LOG_DIR = tempLogs;
+    Object.assign(env, { POSITIONS_DIR: tempDir, MTM_LOG_DIR: tempLogs });
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     if (!fs.existsSync(tempLogs)) fs.mkdirSync(tempLogs, { recursive: true });
   });
