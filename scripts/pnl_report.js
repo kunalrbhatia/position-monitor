@@ -131,7 +131,9 @@ function buildReport(position, legDetails) {
   lines.push('   ⚡️ TRADE PERFORMANCE ⚡️');
   lines.push('┗━━━━━━━━━━━━━━━━━━━━━━━━━┛');
   lines.push('');
-  lines.push(`💰 Total PnL:        ${totalMTM >= 0 ? '+' : ''}₹${fmt(totalMTM)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`);
+  lines.push(
+    `💰 Total PnL:        ${totalMTM >= 0 ? '+' : ''}₹${fmt(totalMTM)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`,
+  );
   lines.push('');
   lines.push('─────────────────────────');
   lines.push(`🎯 PT (Target):       ₹${fmt(pt)} ${totalMTM >= pt ? '✅' : ''}`);
