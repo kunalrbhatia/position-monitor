@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   ci:
@@ -38,7 +38,7 @@ jobs:
         run: pnpm exec tsc --noEmit
 
       - name: Run Jest Tests (100% Coverage)
-        run: pnpm run test
+        run: pnpm run test:coverage
         env:
           NODE_ENV: test
 
