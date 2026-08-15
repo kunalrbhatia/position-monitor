@@ -17,7 +17,7 @@ export const PositionSchema = z.object({
   positionId: z.string(),
   index: z.enum(['NIFTY', 'SENSEX']),
   status: z.enum(['OPEN', 'CLOSED']),
-  baselineValue: z.number().positive(),
+  baselineValue: z.number().positive().nullable().optional(),
   entryTimestamp: z.string(),
   legs: z.array(LegSchema),
 });
