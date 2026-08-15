@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['jest.config.js', 'dist/**', 'coverage/**', '.agents/**'],
+    ignores: ['jest.config.js', 'ecosystem.config.cjs', 'dist/**', 'coverage/**', '.agents/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
