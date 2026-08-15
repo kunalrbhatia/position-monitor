@@ -16,8 +16,7 @@ describe('Jobs & Integration Coverage Tests', () => {
   const tempLogs = path.join(process.cwd(), 'temp_test_logs');
 
   beforeAll(() => {
-    (env as any).POSITIONS_DIR = tempDir;
-    (env as any).MTM_LOG_DIR = tempLogs;
+    Object.assign(env, { POSITIONS_DIR: tempDir, MTM_LOG_DIR: tempLogs });
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     if (!fs.existsSync(tempLogs)) fs.mkdirSync(tempLogs, { recursive: true });
   });
@@ -41,7 +40,7 @@ describe('Jobs & Integration Coverage Tests', () => {
     expect(files.some((f) => f.includes('test-pos'))).toBe(true);
   });
 
-  test('positionWatcher loads JSON files and ignores invalid/CLOSED files', () => {
+  test('positionWatcher loads JSON files, backfills missing baselineValue, and ignores invalid files', async () => {
     const validPos: Position = {
       positionId: 'watcher-pos-1',
       index: 'NIFTY',
@@ -64,11 +63,25 @@ describe('Jobs & Integration Coverage Tests', () => {
       ],
     };
 
+    const noBaselinePos: Position = {
+      positionId: 'watcher-pos-nobaseline',
+      index: 'NIFTY',
+      status: 'OPEN',
+      baselineValue: null,
+      entryTimestamp: '2026-08-14T09:45:00+05:30',
+      legs: [],
+    };
+
     fs.writeFileSync(path.join(tempDir, 'watcher-pos-1.json'), JSON.stringify(validPos));
+    fs.writeFileSync(
+      path.join(tempDir, 'watcher-pos-nobaseline.json'),
+      JSON.stringify(noBaselinePos),
+    );
     fs.writeFileSync(path.join(tempDir, 'invalid.json'), 'invalid json');
 
-    runPositionWatcher();
+    await runPositionWatcher();
     expect(positionStore.getPosition('watcher-pos-1')).toBeDefined();
+    expect(positionStore.getPosition('watcher-pos-nobaseline')).toBeDefined();
     expect(positionStore.getWatchedTokens().has('99001')).toBe(true);
   });
 

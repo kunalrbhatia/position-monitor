@@ -95,8 +95,9 @@ class PositionStore {
           } else {
             this.positions.delete(position.positionId);
           }
-        } catch (err: any) {
-          notifyAlert(`[PositionStore] Error loading position file ${file}: ${err.message}`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          notifyAlert(`[PositionStore] Error loading position file ${file}: ${message}`);
         }
       }
     }
@@ -108,6 +109,63 @@ class PositionStore {
     }
 
     this.rebuildWatchedTokens();
+  }
+
+  public async backfillBaselineValues(
+    dirPath: string,
+    getToken: () => Promise<string | null> = async () => {
+      const { getBrokerSessionToken } = await import('../helpers/login.js');
+      return getBrokerSessionToken();
+    },
+    getMargin: (jwt: string) => Promise<number> = async (jwt: string) => {
+      const { fetchMarginUtilized } = await import('../helpers/margin.js');
+      return fetchMarginUtilized(jwt);
+    },
+  ): Promise<void> {
+    const openPositionsWithoutBaseline = Array.from(this.positions.values()).filter(
+      (pos) =>
+        pos.status === 'OPEN' &&
+        (pos.baselineValue === null || pos.baselineValue === undefined || pos.baselineValue <= 0),
+    );
+
+    if (openPositionsWithoutBaseline.length === 0) {
+      return;
+    }
+
+    const jwtToken = await getToken();
+    if (!jwtToken) {
+      for (const pos of openPositionsWithoutBaseline) {
+        notifyAlert(
+          `[${pos.positionId}] Margin fetch failed: Unable to obtain broker session token for baseline backfill.`,
+        );
+      }
+      return;
+    }
+
+    let margin: number;
+    try {
+      margin = await getMargin(jwtToken);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      for (const pos of openPositionsWithoutBaseline) {
+        notifyAlert(`[${pos.positionId}] Margin fetch failed: ${message}`);
+      }
+      return;
+    }
+
+    for (const pos of openPositionsWithoutBaseline) {
+      pos.baselineValue = margin;
+      const filePath = path.join(dirPath, `${pos.positionId}.json`);
+      try {
+        fs.writeFileSync(filePath, JSON.stringify(pos, null, 2), 'utf-8');
+        notifyAlert(
+          `baselineValue backfilled for ${pos.positionId} = ₹${margin} (from RMS margin)`,
+        );
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        notifyAlert(`[${pos.positionId}] Failed to persist backfilled baselineValue: ${message}`);
+      }
+    }
   }
 
   public updatePositionStatus(positionId: string, status: 'OPEN' | 'CLOSED'): void {

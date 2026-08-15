@@ -98,8 +98,9 @@ export async function executePositionExit(
   const filePath = path.join(env.POSITIONS_DIR, `${position.positionId}.json`);
   try {
     fs.writeFileSync(filePath, JSON.stringify(position, null, 2), 'utf-8');
-  } catch (err: any) {
-    notifyAlert(`[${position.positionId}] Failed to update position JSON on exit: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    notifyAlert(`[${position.positionId}] Failed to update position JSON on exit: ${message}`);
   }
 
   positionStore.setPosition(position);

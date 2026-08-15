@@ -14,7 +14,7 @@ export interface OrderPayload {
 export async function placeBrokerExitOrder(
   jwtToken: string,
   order: OrderPayload,
-): Promise<{ success: boolean; data?: any; error?: string }> {
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
   try {
     const response = await axios.post(
       'https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/placeOrder',
@@ -39,7 +39,8 @@ export async function placeBrokerExitOrder(
       return { success: true, data: response.data };
     }
     return { success: false, error: response.data?.message || 'Order failed at broker' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'API request error' };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'API request error';
+    return { success: false, error: errorMsg };
   }
 }

@@ -6,7 +6,7 @@ This algorithm tracks live position MTM P&L via tick webhooks from Angel One Sma
 
 ## Features
 
-- **External Position Input**: Accepts position JSON files in `data/positions/*.json` (`status: "OPEN"`).
+- **External Position Input**: Accepts position JSON files in `data/positions/*.json` (`status: "OPEN"`). The `baselineValue` field is optional/nullable — if omitted or set to `null`, it is automatically fetched from Angel One SmartAPI RMS margin and persisted back to the JSON file.
 - **Asymmetric Threshold Exit**: Auto-exits non-worthless open legs (`LTP >= ₹5`) on `+1.5%` PT or `-2.0%` SL relative to `baselineValue`.
 - **Tick Ingestion**: Receives tick updates via `POST /webhook/ticks`.
 - **5-Minute Clock-Aligned MTM Logs**: Appends IST timestamped MTM records to `logs/mtm/mtm-{positionId}-{YYYY-MM-DD}.log`.
@@ -14,7 +14,7 @@ This algorithm tracks live position MTM P&L via tick webhooks from Angel One Sma
   - `.paper`: Runs exit logic in paper trading mode without sending broker orders.
   - `.kill`: Soft pause — blocks scanning/pickup of new position files.
   - `.panic`: Hard stop — blocks exit order placement.
-- **Dedicated Alerts**: Logs warnings/errors (missing baselineValue, stale ticks, failed order fills) to `logs/alerts/alerts.log`.
+- **Dedicated Alerts**: Logs warnings/errors (missing baselineValue, stale ticks, failed order fills, failed margin backfills) to `logs/alerts/alerts.log`.
 
 ## Installation & Setup
 
