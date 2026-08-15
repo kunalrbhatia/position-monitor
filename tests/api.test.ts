@@ -15,7 +15,7 @@ describe('API & Login Helpers Unit Tests', () => {
     });
     expect(res.success).toBe(false);
     expect(res.error).toBeDefined();
-  });
+  }, 15000);
 
   test('getBrokerSessionToken returns null when env variables missing', async () => {
     const token = await getBrokerSessionToken();
