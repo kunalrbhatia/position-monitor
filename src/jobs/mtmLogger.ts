@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { positionStore } from '../store/index.js';
-import { calculatePositionMTM } from '../helpers/mtm.js';
 import { env } from '../config/env.js';
 
 export function formatISTLogDate(date: Date = new Date()): {
@@ -63,6 +62,8 @@ export function writeMTMLogLine(
 
   fs.appendFileSync(filePath, line, 'utf-8');
 }
+
+import { calculatePositionMTM } from '../helpers/mtm.js';
 
 export function runMTMLogger(now: Date = new Date()): void {
   const openPositions = positionStore.getPositions();

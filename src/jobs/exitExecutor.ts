@@ -111,3 +111,26 @@ export async function executePositionExit(
     failedLegs,
   };
 }
+
+export async function executeCombinedExit(
+  positions: Position[],
+  reason: 'PROFIT_TARGET' | 'STOP_LOSS',
+  currentMTM: number,
+): Promise<{ success: boolean; closedLegs: string[]; failedLegs: string[] }> {
+  let allSuccess = true;
+  const allClosedLegs: string[] = [];
+  const allFailedLegs: string[] = [];
+
+  for (const pos of positions) {
+    const res = await executePositionExit(pos, reason, currentMTM);
+    if (!res.success) allSuccess = false;
+    allClosedLegs.push(...res.closedLegs);
+    allFailedLegs.push(...res.failedLegs);
+  }
+
+  return {
+    success: allSuccess,
+    closedLegs: allClosedLegs,
+    failedLegs: allFailedLegs,
+  };
+}
