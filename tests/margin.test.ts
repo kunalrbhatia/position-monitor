@@ -1,12 +1,12 @@
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 
-describe('fetchMarginUtilized Unit Tests', () => {
+describe('Margin Helper Unit Tests', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
   });
 
-  test('successfully returns parsed margin utilized number', async () => {
+  test('successfully returns parsed margin utilized number from RMS API', async () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
         get: jest.fn().mockResolvedValue({
@@ -18,6 +18,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
             },
           },
         }),
+        post: jest.fn(),
       },
     }));
 
@@ -26,7 +27,69 @@ describe('fetchMarginUtilized Unit Tests', () => {
     expect(margin).toBe(12345.67);
   });
 
-  test('throws error on non-true status from broker', async () => {
+  test('successfully returns batch margin from Angel One Batch Margin API', async () => {
+    jest.unstable_mockModule('axios', () => ({
+      default: {
+        get: jest.fn(),
+        post: jest.fn().mockResolvedValue({
+          data: {
+            status: true,
+            message: 'SUCCESS',
+            data: {
+              totalMargin: 75000.5,
+            },
+          },
+        }),
+      },
+    }));
+
+    const { fetchBasketMarginUtilized } = await import('../src/helpers/margin.js');
+    const margin = await fetchBasketMarginUtilized('mock_jwt_token', [
+      {
+        exchange: 'NFO',
+        token: '1001',
+        qty: 50,
+        entryPrice: 100,
+        side: 'BUY',
+      },
+    ]);
+    expect(margin).toBe(75000.5);
+  });
+
+  test('fetchBasketMarginUtilized returns 0 when legs array is empty', async () => {
+    const { fetchBasketMarginUtilized } = await import('../src/helpers/margin.js');
+    const margin = await fetchBasketMarginUtilized('mock_jwt_token', []);
+    expect(margin).toBe(0);
+  });
+
+  test('fetchBasketMarginUtilized throws error on broker failure or invalid response', async () => {
+    jest.unstable_mockModule('axios', () => ({
+      default: {
+        get: jest.fn(),
+        post: jest.fn().mockResolvedValue({
+          data: {
+            status: false,
+            message: 'Margin calculation failed',
+          },
+        }),
+      },
+    }));
+
+    const { fetchBasketMarginUtilized } = await import('../src/helpers/margin.js');
+    await expect(
+      fetchBasketMarginUtilized('mock_jwt_token', [
+        {
+          exchange: 'NFO',
+          token: '1001',
+          qty: 50,
+          entryPrice: 100,
+          side: 'BUY',
+        },
+      ]),
+    ).rejects.toThrow('Margin calculation failed');
+  });
+
+  test('throws error on non-true status from broker RMS', async () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
         get: jest.fn().mockResolvedValue({
@@ -35,6 +98,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
             message: 'Invalid token',
           },
         }),
+        post: jest.fn(),
       },
     }));
 
@@ -53,6 +117,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
             },
           },
         }),
+        post: jest.fn(),
       },
     }));
 
@@ -66,6 +131,7 @@ describe('fetchMarginUtilized Unit Tests', () => {
     jest.unstable_mockModule('axios', () => ({
       default: {
         get: jest.fn().mockRejectedValue(new Error('Network Error')),
+        post: jest.fn(),
       },
     }));
 

@@ -22,6 +22,26 @@ class PositionStore {
     return this.positions.get(positionId);
   }
 
+  public getPositionMargin(pos: Position): number | null {
+    if (
+      pos.marginUtilized !== null &&
+      pos.marginUtilized !== undefined &&
+      !isNaN(pos.marginUtilized) &&
+      pos.marginUtilized > 0
+    ) {
+      return pos.marginUtilized;
+    }
+    if (
+      pos.baselineValue !== null &&
+      pos.baselineValue !== undefined &&
+      !isNaN(pos.baselineValue) &&
+      pos.baselineValue > 0
+    ) {
+      return pos.baselineValue;
+    }
+    return null;
+  }
+
   public getLtpCache(): Map<string, number> {
     const map = new Map<string, number>();
     for (const [token, info] of this.ltpCache.entries()) {
@@ -117,53 +137,77 @@ class PositionStore {
       const { getBrokerSessionToken } = await import('../helpers/login.js');
       return getBrokerSessionToken();
     },
-    getMargin: (jwt: string) => Promise<number> = async (jwt: string) => {
+    getMarginForLegs: (
+      jwt: string,
+      legs: import('../helpers/margin.js').PositionMarginLegParam[],
+    ) => Promise<number> = async (jwt: string, legs) => {
+      const { fetchBasketMarginUtilized } = await import('../helpers/margin.js');
+      return fetchBasketMarginUtilized(jwt, legs);
+    },
+    getRMSMargin: (jwt: string) => Promise<number> = async (jwt: string) => {
       const { fetchMarginUtilized } = await import('../helpers/margin.js');
       return fetchMarginUtilized(jwt);
     },
   ): Promise<void> {
-    const openPositionsWithoutBaseline = Array.from(this.positions.values()).filter(
-      (pos) =>
-        pos.status === 'OPEN' &&
-        (pos.baselineValue === null || pos.baselineValue === undefined || pos.baselineValue <= 0),
-    );
+    const openPositionsWithoutMargin = Array.from(this.positions.values()).filter((pos) => {
+      if (pos.status !== 'OPEN') return false;
+      const margin = this.getPositionMargin(pos);
+      return margin === null || margin <= 0;
+    });
 
-    if (openPositionsWithoutBaseline.length === 0) {
+    if (openPositionsWithoutMargin.length === 0) {
       return;
     }
 
     const jwtToken = await getToken();
     if (!jwtToken) {
-      for (const pos of openPositionsWithoutBaseline) {
-        notifyAlert(
-          `[${pos.positionId}] Margin fetch failed: Unable to obtain broker session token for baseline backfill.`,
-        );
-      }
-      return;
+      const msg = `[PositionStore] Unable to obtain broker session token for marginUtilized calculation. Position monitoring blocked!`;
+      notifyAlert(msg);
+      throw new Error(msg);
     }
 
-    let margin: number;
-    try {
-      margin = await getMargin(jwtToken);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      for (const pos of openPositionsWithoutBaseline) {
-        notifyAlert(`[${pos.positionId}] Margin fetch failed: ${message}`);
-      }
-      return;
-    }
+    for (const pos of openPositionsWithoutMargin) {
+      let margin: number;
+      const legParams: import('../helpers/margin.js').PositionMarginLegParam[] = pos.legs
+        .filter((l) => l.status === 'OPEN')
+        .map((l) => ({
+          exchange: pos.index === 'SENSEX' ? 'BFO' : 'NFO',
+          token: l.token,
+          qty: l.qty,
+          entryPrice: l.entryPrice,
+          side: l.side,
+        }));
 
-    for (const pos of openPositionsWithoutBaseline) {
-      pos.baselineValue = margin;
+      try {
+        if (legParams.length > 0) {
+          margin = await getMarginForLegs(jwtToken, legParams);
+        } else {
+          margin = await getRMSMargin(jwtToken);
+        }
+      } catch (err: unknown) {
+        // Fallback to RMS margin if batch margin fails
+        try {
+          margin = await getRMSMargin(jwtToken);
+        } catch (rmsErr: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          const alertMsg = `[${pos.positionId}] Failed to calculate marginUtilized: ${message}. Position monitoring BLOCKED!`;
+          notifyAlert(alertMsg);
+          throw new Error(alertMsg, { cause: rmsErr });
+        }
+      }
+
+      pos.marginUtilized = margin;
+      pos.baselineValue = margin; // set for backwards compatibility
+
       const filePath = path.join(dirPath, `${pos.positionId}.json`);
       try {
         fs.writeFileSync(filePath, JSON.stringify(pos, null, 2), 'utf-8');
-        notifyAlert(
-          `baselineValue backfilled for ${pos.positionId} = ₹${margin} (from RMS margin)`,
-        );
+        notifyAlert(`marginUtilized calculated and saved for ${pos.positionId} = ₹${margin}`);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        notifyAlert(`[${pos.positionId}] Failed to persist backfilled baselineValue: ${message}`);
+        const alertMsg = `[${pos.positionId}] Failed to persist marginUtilized: ${message}`;
+        notifyAlert(alertMsg);
+        throw new Error(alertMsg, { cause: err });
       }
     }
   }

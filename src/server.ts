@@ -35,13 +35,16 @@ export function processTick(token: string, ltp: number): void {
   for (const [posId, pos] of positions.entries()) {
     if (pos.status !== 'OPEN') continue;
 
+    const margin = positionStore.getPositionMargin(pos);
+    if (margin === null || margin <= 0) continue;
+
     const hasLegToken = pos.legs.some((l) => l.status === 'OPEN' && l.token === token);
     if (!hasLegToken) continue;
 
     const { totalMTM, hasAllLTPs } = calculatePositionMTM(pos, ltpCache);
     if (!hasAllLTPs) continue;
 
-    const thresholdRes = checkThresholds(posId, pos.baselineValue, totalMTM);
+    const thresholdRes = checkThresholds(posId, margin, totalMTM);
     if (thresholdRes.breached && thresholdRes.type) {
       executePositionExit(pos, thresholdRes.type, totalMTM).catch((_err) => {
         // Error logged inside exitExecutor
