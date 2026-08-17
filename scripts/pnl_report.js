@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Calendar Position P&L Reporter (ESM)
- * Fetches live LTPs for the IC2IF calendar legs and prints a formatted
- * P&L report with PT/SL thresholds. Designed to run as a no_agent cron job.
+ * Position P&L Reporter (ESM)
+ * Fetches live LTPs for all position legs and prints a formatted
+ * P&L report with PT/SL thresholds per position. Designed to run as a
+ * no_agent cron job.
  *
- * Quiet when: weekend, outside market hours (9:30-15:30 IST), no position file,
- * or no open legs — so the cron stays silent outside trading windows.
+ * Quiet when: weekend, outside market hours (9:30-15:30 IST), no position
+ * files, or no open legs — so the cron stays silent outside trading windows.
  */
 import axios from 'axios';
 import fs from 'fs';
@@ -17,7 +18,7 @@ import * as otplibModule from 'otplib';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-const POSITION_FILE = path.join(__dirname, '..', 'data', 'positions', 'IC2IF-CAL-18-25AUG.json');
+const POSITIONS_DIR = path.join(__dirname, '..', 'data', 'positions');
 const BASE_URL = 'https://apiconnect.angelbroking.com';
 
 // ---------- Time gating (IST) ----------
@@ -116,11 +117,11 @@ function fmt(n) {
 }
 
 function buildReport(position, legDetails) {
-  const baseline = position.baselineValue || 0;
-  const pt = baseline * 0.015; // +1.5%
-  const sl = baseline * 0.02; // -2.0% (loss threshold value)
+  const margin = position.marginUtilized || position.baselineValue || 0;
+  const pt = margin * 0.015; // +1.5%
+  const sl = margin * 0.02; // -2.0% (loss threshold value)
   const totalMTM = legDetails.reduce((s, l) => s + l.mtm, 0);
-  const pct = baseline > 0 ? (totalMTM / baseline) * 100 : 0;
+  const pct = margin > 0 ? (totalMTM / margin) * 100 : 0;
 
   let status = 'Monitoring';
   if (totalMTM >= pt) status = 'Target Achieved 🚀';
@@ -131,6 +132,7 @@ function buildReport(position, legDetails) {
   lines.push('   ⚡️ TRADE PERFORMANCE ⚡️');
   lines.push('┗━━━━━━━━━━━━━━━━━━━━━━━━━┛');
   lines.push('');
+  lines.push(`📌 Position: ${position.positionId}`);
   lines.push(
     `💰 Total PnL:        ${totalMTM >= 0 ? '+' : ''}₹${fmt(totalMTM)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`,
   );
@@ -138,7 +140,7 @@ function buildReport(position, legDetails) {
   lines.push('─────────────────────────');
   lines.push(`🎯 PT (Target):       ₹${fmt(pt)} ${totalMTM >= pt ? '✅' : ''}`);
   lines.push(`🛑 SL (Stop Loss):    ₹${fmt(sl)} ${totalMTM <= -sl ? '✅' : ''}`);
-  lines.push(`💼 Margin Utilized:   ₹${fmt(baseline)}`);
+  lines.push(`💼 Margin Utilized:   ₹${fmt(margin)}`);
   lines.push('─────────────────────────');
   lines.push('');
   lines.push(`📌 Status: ${status}`);
@@ -151,27 +153,48 @@ async function main() {
     return; // silent outside market hours / weekends
   }
 
-  if (!fs.existsSync(POSITION_FILE)) {
-    console.log('⚠️ Position file not found:', POSITION_FILE);
+  if (!fs.existsSync(POSITIONS_DIR)) {
+    console.log('⚠️ Positions directory not found:', POSITIONS_DIR);
     return;
   }
 
-  const position = JSON.parse(fs.readFileSync(POSITION_FILE, 'utf-8'));
-  const openLegs = position.legs.filter((l) => l.status === 'OPEN');
-  if (openLegs.length === 0) {
-    return; // no open legs — nothing to report
+  const files = fs.readdirSync(POSITIONS_DIR).filter((f) => f.endsWith('.json'));
+
+  if (files.length === 0) {
+    return; // no position files — nothing to report (silent)
   }
 
   const { jwtToken, publicIP } = await login();
-  const legDetails = [];
-  for (const leg of openLegs) {
-    const ltp = await fetchLTP(jwtToken, publicIP, leg);
-    const mtm =
-      leg.side === 'BUY' ? (ltp - leg.entryPrice) * leg.qty : (leg.entryPrice - ltp) * leg.qty;
-    legDetails.push({ symbol: leg.symbol, side: leg.side, qty: leg.qty, ltp, mtm });
+  const reports = [];
+
+  for (const file of files) {
+    const filePath = path.join(POSITIONS_DIR, file);
+    let position;
+    try {
+      position = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch {
+      continue; // skip unreadable files
+    }
+
+    const openLegs = position.legs.filter((l) => l.status === 'OPEN');
+    if (openLegs.length === 0) {
+      continue; // no open legs in this position
+    }
+
+    const legDetails = [];
+    for (const leg of openLegs) {
+      const ltp = await fetchLTP(jwtToken, publicIP, leg);
+      const mtm =
+        leg.side === 'BUY' ? (ltp - leg.entryPrice) * leg.qty : (leg.entryPrice - ltp) * leg.qty;
+      legDetails.push({ symbol: leg.symbol, side: leg.side, qty: leg.qty, ltp, mtm });
+    }
+
+    reports.push(buildReport(position, legDetails));
   }
 
-  console.log(buildReport(position, legDetails));
+  if (reports.length > 0) {
+    console.log(reports.join('\n\n'));
+  }
 }
 
 main().catch((err) => {
