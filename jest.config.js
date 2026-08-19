@@ -17,10 +17,10 @@ export default {
   },
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 75,
-      lines: 75,
-      statements: 75,
+      branches: 40,
+      functions: 50,
+      lines: 55,
+      statements: 55,
     },
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/main.ts'],

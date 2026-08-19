@@ -24,6 +24,7 @@
     "node-cron": "^4.6.0",
     "otplib": "^13.4.1",
     "winston": "^3.19.0",
+    "ws": "^8.21.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -33,6 +34,7 @@
     "@types/node": "^26.2.0",
     "@types/node-cron": "^3.0.11",
     "@types/supertest": "^7.2.1",
+    "@types/ws": "^8.5.14",
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
     "jest": "^30.4.2",

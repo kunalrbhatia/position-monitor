@@ -2,9 +2,6 @@ import axios from 'axios';
 import { generateSync, createGuardrails } from 'otplib';
 import { env } from '../config/env.js';
 
-let cachedJwtToken: string | null = null;
-let tokenExpiryTime = 0;
-
 async function getPublicIP(): Promise<string> {
   try {
     const resp = await axios.get('https://api.ipify.org', { timeout: 5000 });
@@ -14,9 +11,17 @@ async function getPublicIP(): Promise<string> {
   }
 }
 
-export async function getBrokerSessionToken(): Promise<string | null> {
-  if (cachedJwtToken && Date.now() < tokenExpiryTime) {
-    return cachedJwtToken;
+export interface BrokerAuthSession {
+  jwtToken: string;
+  feedToken: string;
+}
+
+let cachedAuthSession: BrokerAuthSession | null = null;
+let tokenExpiryTime = 0;
+
+export async function getBrokerAuthSession(): Promise<BrokerAuthSession | null> {
+  if (cachedAuthSession && Date.now() < tokenExpiryTime) {
+    return cachedAuthSession;
   }
 
   if (!env.API_KEY || !env.CLIENT_CODE || !env.CLIENT_PIN || !env.CLIENT_TOTP_PIN) {
@@ -57,13 +62,31 @@ export async function getBrokerSessionToken(): Promise<string | null> {
       },
     );
 
-    if (response.data && response.data.status === true && response.data.data?.jwtToken) {
-      cachedJwtToken = response.data.data.jwtToken;
+    if (
+      response.data &&
+      response.data.status === true &&
+      response.data.data?.jwtToken &&
+      response.data.data?.feedToken
+    ) {
+      cachedAuthSession = {
+        jwtToken: response.data.data.jwtToken,
+        feedToken: response.data.data.feedToken,
+      };
       tokenExpiryTime = Date.now() + 12 * 60 * 60 * 1000;
-      return cachedJwtToken;
+      return cachedAuthSession;
     }
   } catch {
     // Auth failure
   }
   return null;
+}
+
+export async function getBrokerSessionToken(): Promise<string | null> {
+  const session = await getBrokerAuthSession();
+  return session ? session.jwtToken : null;
+}
+
+export function resetBrokerAuthSession(): void {
+  cachedAuthSession = null;
+  tokenExpiryTime = 0;
 }

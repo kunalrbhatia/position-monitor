@@ -17,6 +17,13 @@ This algorithm tracks live position MTM P&L via tick webhooks from Angel One Sma
   - `.kill`: Soft pause — blocks scanning/pickup of new position files.
   - `.panic`: Hard stop — blocks exit order placement.
 - **Dedicated Alerts**: Logs warnings/errors (missing marginUtilized, API failures, stale ticks, failed order fills) to `logs/alerts/alerts.log`.
+- **SmartAPI Tick Feeder Daemon**: Connects directly to Angel One SmartAPI WebSocket (`wss://smartapisocket.angelone.in/smart-stream`), subscribing to all tokens from open legs across `data/positions/*.json` files and forwarding live LTP ticks to `POST /webhook/ticks`.
+  - **Morning Refresh**: Automatically re-logins, reconnects, and re-subscribes every morning before market open (09:10 IST default via `FEEDER_REFRESH_TIME`).
+  - **Self-Healing Stale-Tick Repair Ladder**: If ticks stop arriving during market hours (`STALE_TICK_SECONDS`, default 90s):
+    1. Re-subscribes token list.
+    2. Re-logins to Angel One API and reconnects WebSocket session.
+    3. Refreshes instrument tokens using local/downloaded Scrip Master (`scrip_master.json`) and updates position JSON files in place.
+    4. Triggers escalation alert `FEEDER DOWN after repair cycle` if feed remains silent.
 
 ## Multi-Position Behavior Example
 
