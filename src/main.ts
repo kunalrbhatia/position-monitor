@@ -6,6 +6,8 @@ import { runMTMLogger } from './jobs/mtmLogger.js';
 import { positionStore } from './store/index.js';
 import { notifyAlert } from './alerts/notifier.js';
 
+import { startTickFeeder, stopTickFeeder } from './helpers/tickFeeder.js';
+
 export function checkStaleTicks(): void {
   const now = Date.now();
   const maxAgeMs = env.STALE_TICK_SECONDS * 1000;
@@ -40,6 +42,18 @@ export function startApp() {
 
   cron.schedule('*/30 * * * * *', () => {
     checkStaleTicks();
+  });
+
+  startTickFeeder();
+
+  process.on('SIGINT', () => {
+    stopTickFeeder();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => {
+    stopTickFeeder();
+    process.exit(0);
   });
 
   app.listen(env.PORT, () => {
