@@ -51,6 +51,7 @@ export async function fetchBasketMarginUtilized(
     qty: leg.qty,
     price: leg.entryPrice,
     productType: 'CARRYFORWARD',
+    orderType: 'MARKET',
     token: leg.token,
     tradeType: leg.side,
   }));
@@ -76,8 +77,9 @@ export async function fetchBasketMarginUtilized(
 
   if (response.data && response.data.status === true && response.data.data) {
     const totalMargin =
-      response.data.data.totalMargin ||
-      response.data.data.marginRequired ||
+      response.data.data.totalMarginRequired ??
+      response.data.data.totalMargin ??
+      response.data.data.marginRequired ??
       response.data.data.margin;
     const margin = typeof totalMargin === 'number' ? totalMargin : parseFloat(totalMargin);
     if (!isNaN(margin) && margin > 0) {
