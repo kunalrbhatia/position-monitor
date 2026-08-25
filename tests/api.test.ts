@@ -1,5 +1,32 @@
 import { describe, test, expect, jest } from '@jest/globals';
 import axios from 'axios';
+
+jest.mock('../src/config/env.js', () => ({
+  env: {
+    PORT: 3000,
+    NODE_ENV: 'test',
+    API_KEY: '',
+    CLIENT_CODE: '',
+    CLIENT_PIN: '',
+    CLIENT_TOTP_PIN: '',
+    PROFIT_TARGET_PCT: 1.5,
+    STOPLOSS_PCT: 2.0,
+    WORTHLESS_LTP_THRESHOLD: 5.0,
+    STALE_TICK_SECONDS: 90,
+    MTM_LOG_INTERVAL_MINUTES: 5,
+    POSITIONS_DIR: '/tmp/positions',
+    MTM_LOG_DIR: '/tmp/mtm',
+    ALERTS_LOG_DIR: '/tmp/alerts',
+    FEEDER_REFRESH_TIME: '09:10',
+    FEEDER_WS_URL: 'wss://x',
+    MONITOR_WEBHOOK_URL: 'http://localhost:3000',
+    SCRIP_MASTER_PATH: '/tmp/scrip.json',
+    EXIT_RETRY_COOLDOWN_MS: 300000,
+    EXIT_MAX_ATTEMPTS_PER_DAY: 5,
+    RATE_LIMIT_BACKOFF_MS: 900000,
+  },
+}));
+
 import { placeBrokerExitOrder, buildCommonHeaders } from '../src/helpers/api.js';
 import { getBrokerSessionToken } from '../src/helpers/login.js';
 
@@ -89,28 +116,7 @@ describe('API & Login Helpers Unit Tests', () => {
   }, 15000);
 
   test('getBrokerSessionToken returns null when env variables missing', async () => {
-    // login.ts reads the cached `env` object (parsed once at import). Temporarily
-    // blank its credential fields to simulate a fresh install without .env —
-    // regardless of what the server's real .env has.
-    const { env } = await import('../src/config/env.js');
-    const saved = {
-      API_KEY: env.API_KEY,
-      CLIENT_CODE: env.CLIENT_CODE,
-      CLIENT_PIN: env.CLIENT_PIN,
-      CLIENT_TOTP_PIN: env.CLIENT_TOTP_PIN,
-    };
-    env.API_KEY = '';
-    env.CLIENT_CODE = '';
-    env.CLIENT_PIN = '';
-    env.CLIENT_TOTP_PIN = '';
-
     const token = await getBrokerSessionToken();
     expect(token).toBeNull();
-
-    // Restore env for other tests
-    env.API_KEY = saved.API_KEY;
-    env.CLIENT_CODE = saved.CLIENT_CODE;
-    env.CLIENT_PIN = saved.CLIENT_PIN;
-    env.CLIENT_TOTP_PIN = saved.CLIENT_TOTP_PIN;
   });
 });

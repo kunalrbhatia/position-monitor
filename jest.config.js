@@ -2,6 +2,7 @@
 export default {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
+  maxWorkers: 1,
   testMatch: ['**/*.test.ts'],
   transform: {
     '^.+\\.tsx?$': [
