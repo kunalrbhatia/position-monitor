@@ -89,7 +89,28 @@ describe('API & Login Helpers Unit Tests', () => {
   }, 15000);
 
   test('getBrokerSessionToken returns null when env variables missing', async () => {
+    // login.ts reads the cached `env` object (parsed once at import). Temporarily
+    // blank its credential fields to simulate a fresh install without .env —
+    // regardless of what the server's real .env has.
+    const { env } = await import('../src/config/env.js');
+    const saved = {
+      API_KEY: env.API_KEY,
+      CLIENT_CODE: env.CLIENT_CODE,
+      CLIENT_PIN: env.CLIENT_PIN,
+      CLIENT_TOTP_PIN: env.CLIENT_TOTP_PIN,
+    };
+    env.API_KEY = '';
+    env.CLIENT_CODE = '';
+    env.CLIENT_PIN = '';
+    env.CLIENT_TOTP_PIN = '';
+
     const token = await getBrokerSessionToken();
     expect(token).toBeNull();
+
+    // Restore env for other tests
+    env.API_KEY = saved.API_KEY;
+    env.CLIENT_CODE = saved.CLIENT_CODE;
+    env.CLIENT_PIN = saved.CLIENT_PIN;
+    env.CLIENT_TOTP_PIN = saved.CLIENT_TOTP_PIN;
   });
 });

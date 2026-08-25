@@ -36,6 +36,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.8.1)
+      '@jest/globals':
+        specifier: ~30.4.1
+        version: 30.4.1
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
