@@ -1,16 +1,18 @@
 ### Description
 
-Implements independent position file monitoring and calculation of `marginUtilized` using Angel One's Batch Margin Calculator API. Updates the project documentation (`README.md`) with a multi-position strategy execution example.
+Fixes position-monitor exit order failure loop and rate-limit storm by adding required order payload fields (`variety: 'NORMAL'`, `duration: 'DAY'`), introducing per-position retry cooldowns, max daily attempt caps, in-flight execution guards, rate-limit backoff, session refresh on auth errors, and conditional disk writes.
 
 ### Changes
 
-- Added `marginUtilized` field support to `PositionSchema` ([`src/types/position.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/src/types/position.ts)).
-- Added `fetchBasketMarginUtilized()` in [`src/helpers/margin.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/src/helpers/margin.ts) using Angel One's Batch Margin Calculator API (`/rest/secure/angelbroking/margin/v1/batch`).
-- Updated [`src/store/index.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/src/store/index.ts) to calculate and persist `marginUtilized` for each position file independently.
-- Isolated threshold checking and exit execution per position file in [`src/jobs/positionWatcher.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/src/jobs/positionWatcher.ts), [`src/jobs/exitExecutor.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/src/jobs/exitExecutor.ts), and [`src/server.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/src/server.ts).
-- Documented multi-position strategy execution behavior (calendar spread vs call spread) in [`README.md`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/README.md).
-- Updated unit tests in [`tests/store.test.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/tests/store.test.ts), [`tests/jobs.test.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/tests/jobs.test.ts), and [`tests/margin.test.ts`](file:///C:/Users/Kunal/Desktop/hobby-projects/position-monitor/tests/margin.test.ts).
+- Added `variety: 'NORMAL'` and `duration: 'DAY'` to `OrderPayload` in `src/helpers/api.ts`.
+- Standardized request headers (`User-Agent` and public IP) via `buildCommonHeaders`.
+- Added per-position retry cooldown (`EXIT_RETRY_COOLDOWN_MS`) and max daily attempt caps (`EXIT_MAX_ATTEMPTS_PER_DAY`) in `src/jobs/exitExecutor.ts`.
+- Added per-position in-flight state tracking in `src/store/index.ts`.
+- Implemented rate-limit detection (`rateLimitHit`) with backoff (`RATE_LIMIT_BACKOFF_MS`) and JWT session auto-refresh on HTTP authentication errors.
+- Conditioned position file disk writes on actual status changes to prevent disk churn and position file resurrection loops.
+- Added reconnect backoff and alert suppression to WebSocket close handling in `src/helpers/tickFeeder.ts`.
+- Updated unit tests in `tests/api.test.ts` and `tests/jobs.test.ts`.
 
 ### Verification
 
-- `pnpm run verify` passed cleanly (Prettier, tsc typecheck, ESLint, 100% passing Jest test suite, and build).
+- `pnpm run verify` passed (Prettier formatting, TypeScript typecheck, ESLint, 100% test suite pass rate across 49 unit tests, and tsc build).

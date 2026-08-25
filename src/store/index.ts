@@ -212,12 +212,27 @@ class PositionStore {
     }
   }
 
+  private inFlightExits: Set<string> = new Set();
+
+  public isExitInFlight(positionId: string): boolean {
+    return this.inFlightExits.has(positionId);
+  }
+
+  public markExitInFlight(positionId: string, inFlight: boolean): void {
+    if (inFlight) {
+      this.inFlightExits.add(positionId);
+    } else {
+      this.inFlightExits.delete(positionId);
+    }
+  }
+
   public updatePositionStatus(positionId: string, status: 'OPEN' | 'CLOSED'): void {
     const pos = this.positions.get(positionId);
     if (pos) {
       pos.status = status;
       if (status === 'CLOSED') {
         this.positions.delete(positionId);
+        this.inFlightExits.delete(positionId);
       }
       this.rebuildWatchedTokens();
     }

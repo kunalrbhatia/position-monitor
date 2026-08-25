@@ -24,6 +24,13 @@ This algorithm tracks live position MTM P&L via tick webhooks from Angel One Sma
     2. Re-logins to Angel One API and reconnects WebSocket session.
     3. Refreshes instrument tokens using local/downloaded Scrip Master (`scrip_master.json`) and updates position JSON files in place.
     4. Triggers escalation alert `FEEDER DOWN after repair cycle` if feed remains silent.
+- **Exit Execution Protection & Rate-Limit Backoff**:
+  - **Valid Order Payloads**: Order requests explicitly include `variety: 'NORMAL'` and `duration: 'DAY'` required by Angel One API.
+  - **Per-Position Retry Cooldown**: Enforces a configurable cooldown (`EXIT_RETRY_COOLDOWN_MS`, default 5 mins) between failed exit attempts per position.
+  - **Max Daily Attempt Cap**: Hard cap on daily exit attempts per position (`EXIT_MAX_ATTEMPTS_PER_DAY`, default 5). Once reached, further attempts are blocked and alert triggered for manual intervention.
+  - **Per-Position In-Flight Guard**: Prevents concurrent tick and watcher invocations from placing overlapping duplicate exit orders.
+  - **Rate-Limit & Session Refresh**: Detects HTTP 429/403 rate-limit responses, backs off for `RATE_LIMIT_BACKOFF_MS` (default 15 mins), and auto-refreshes expired auth JWT tokens on 401/403 errors.
+  - **Selective Disk Writes**: Position JSON files are only updated on disk when leg/position statuses actually change, preventing file churn and resurrection loops.
 
 ## Multi-Position Behavior Example
 

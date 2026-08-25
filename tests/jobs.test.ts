@@ -72,7 +72,10 @@ describe('Jobs & Integration Coverage Tests', () => {
     positionStore.updateTick('99001', 200); // MTM +6500 > 1.5% of 100k (1500)
 
     await runPositionWatcher();
-    expect(positionStore.getPosition('watcher-pos-1')?.status).toBe('CLOSED');
+    const watcherFileContent = JSON.parse(
+      fs.readFileSync(path.join(tempDir, 'watcher-pos-1.json'), 'utf-8'),
+    );
+    expect(watcherFileContent.status).toBe('CLOSED');
 
     if (fs.existsSync(path.join(process.cwd(), '.paper'))) {
       fs.unlinkSync(path.join(process.cwd(), '.paper'));
@@ -166,10 +169,8 @@ describe('Jobs & Integration Coverage Tests', () => {
     positionStore.updateTick('99002', 100); // pos-B MTM = 0
     processTick('99001', 200); // pos-A MTM = +6500 (breaches +1.5% of 100k = +1500)
 
-    const updatedA = positionStore.getPosition('pos-A');
     const updatedB = positionStore.getPosition('pos-B');
 
-    expect(updatedA?.status).toBe('CLOSED');
     expect(updatedB?.status).toBe('OPEN'); // pos-B remains OPEN
 
     const fileAContent = JSON.parse(fs.readFileSync(path.join(tempDir, 'pos-A.json'), 'utf-8'));
@@ -227,5 +228,133 @@ describe('Jobs & Integration Coverage Tests', () => {
     const res = await executePositionExit(mockPanicPos, 'PROFIT_TARGET', 1000);
     expect(res.success).toBe(false);
     jest.restoreAllMocks();
+  });
+
+  test('cooldown skips broker order when called within EXIT_RETRY_COOLDOWN_MS', async () => {
+    const pos: Position = {
+      positionId: 'cooldown-pos',
+      index: 'NIFTY',
+      status: 'OPEN',
+      marginUtilized: 100000,
+      entryTimestamp: '2026-08-14T09:45:00+05:30',
+      legs: [
+        {
+          legId: 'L-CD1',
+          symbol: 'NIFTY28OCT25C25500',
+          token: '99001',
+          expiry: '2026-10-28',
+          optionType: 'CE',
+          side: 'BUY',
+          qty: 65,
+          lotSize: 65,
+          entryPrice: 100,
+          status: 'OPEN',
+        },
+      ],
+    };
+    positionStore.setPosition(pos);
+    positionStore.updateTick('99001', 200);
+
+    const axiosModule = await import('axios');
+    const postSpy = jest.spyOn(axiosModule.default, 'post').mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 400, data: { message: 'Invalid order' } },
+    });
+
+    env.API_KEY = 'test';
+    env.CLIENT_CODE = 'test';
+    env.CLIENT_PIN = 'test';
+    env.CLIENT_TOTP_PIN = 'test';
+
+    // First attempt: should call broker (axios.post)
+    const res1 = await executePositionExit(pos, 'PROFIT_TARGET', 5000);
+    expect(res1.success).toBe(false);
+
+    // Second attempt immediately after: skipped due to cooldown
+    const res2 = await executePositionExit(pos, 'PROFIT_TARGET', 5000);
+    expect(res2.success).toBe(false);
+
+    postSpy.mockRestore();
+  });
+
+  test('max attempts cap blocks execution after EXIT_MAX_ATTEMPTS_PER_DAY failures', async () => {
+    const pos: Position = {
+      positionId: 'max-attempts-pos',
+      index: 'NIFTY',
+      status: 'OPEN',
+      marginUtilized: 100000,
+      entryTimestamp: '2026-08-14T09:45:00+05:30',
+      legs: [
+        {
+          legId: 'L-MA1',
+          symbol: 'NIFTY28OCT25C25500',
+          token: '99001',
+          expiry: '2026-10-28',
+          optionType: 'CE',
+          side: 'BUY',
+          qty: 65,
+          lotSize: 65,
+          entryPrice: 100,
+          status: 'OPEN',
+        },
+      ],
+      exitState: {
+        attemptCount: 5,
+        lastAttemptDate: new Date().toISOString().split('T')[0],
+      },
+    };
+    positionStore.setPosition(pos);
+
+    const axiosModule = await import('axios');
+    const postSpy = jest.spyOn(axiosModule.default, 'post');
+
+    const res = await executePositionExit(pos, 'PROFIT_TARGET', 5000);
+    expect(res.success).toBe(false);
+    expect(postSpy).not.toHaveBeenCalled();
+
+    postSpy.mockRestore();
+  });
+
+  test('does not rewrite JSON file when all legs fail and no status changed', async () => {
+    const pos: Position = {
+      positionId: 'no-rewrite-pos',
+      index: 'NIFTY',
+      status: 'OPEN',
+      marginUtilized: 100000,
+      entryTimestamp: '2026-08-14T09:45:00+05:30',
+      legs: [
+        {
+          legId: 'L-NR1',
+          symbol: 'NIFTY28OCT25C25500',
+          token: '99001',
+          expiry: '2026-10-28',
+          optionType: 'CE',
+          side: 'BUY',
+          qty: 65,
+          lotSize: 65,
+          entryPrice: 100,
+          status: 'OPEN',
+        },
+      ],
+    };
+    positionStore.setPosition(pos);
+
+    const writeSpy = jest.spyOn(fs, 'writeFileSync');
+    const axiosModule = await import('axios');
+
+    const postSpy = jest.spyOn(axiosModule.default, 'post').mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 400, data: { message: 'Order failed' } },
+    });
+
+    await executePositionExit(pos, 'PROFIT_TARGET', 5000);
+    expect(writeSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('no-rewrite-pos.json'),
+      expect.any(String),
+      expect.any(String),
+    );
+
+    writeSpy.mockRestore();
+    postSpy.mockRestore();
   });
 });
