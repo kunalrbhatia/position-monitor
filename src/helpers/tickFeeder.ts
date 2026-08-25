@@ -280,7 +280,10 @@ export async function connectWebSocket(): Promise<void> {
 
   wsInstance = ws;
 
+  let consecutiveCloseCount = 0;
+
   ws.on('open', () => {
+    consecutiveCloseCount = 0;
     console.log(
       `Tick feeder started — watching ${watchedTokens.length} tokens: ${watchedTokens.join(', ')}`,
     );
@@ -312,7 +315,17 @@ export async function connectWebSocket(): Promise<void> {
 
   ws.on('close', (code: number, reason: Buffer) => {
     const reasonStr = reason.toString();
-    notifyAlert(`[tickFeeder] WebSocket closed code=${code} reason=${reasonStr}`);
+    consecutiveCloseCount++;
+
+    if (consecutiveCloseCount >= 3) {
+      notifyAlert(
+        `[tickFeeder] WebSocket closed repeatedly (count=${consecutiveCloseCount}) code=${code} reason=${reasonStr}`,
+      );
+    } else {
+      console.warn(
+        `[tickFeeder] WebSocket closed code=${code} reason=${reasonStr} (attempt ${consecutiveCloseCount})`,
+      );
+    }
 
     if (heartbeatInterval) clearInterval(heartbeatInterval);
 
@@ -321,11 +334,12 @@ export async function connectWebSocket(): Promise<void> {
       resetBrokerAuthSession();
     }
 
+    const backoffMs = Math.min(30000, 5000 * Math.pow(1.5, consecutiveCloseCount - 1));
     setTimeout(() => {
       if (!modeManager.isKillMode()) {
         connectWebSocket().catch(() => {});
       }
-    }, 5000);
+    }, backoffMs);
   });
 }
 

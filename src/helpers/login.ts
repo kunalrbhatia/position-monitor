@@ -2,6 +2,8 @@ import axios from 'axios';
 import { generateSync, createGuardrails } from 'otplib';
 import { env } from '../config/env.js';
 
+import { buildCommonHeaders } from './api.js';
+
 async function getPublicIP(): Promise<string> {
   try {
     const resp = await axios.get('https://api.ipify.org', { timeout: 5000 });
@@ -48,16 +50,7 @@ export async function getBrokerAuthSession(): Promise<BrokerAuthSession | null> 
         totp: token,
       },
       {
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'X-UserType': 'USER',
-          'X-SourceID': 'WEB',
-          'X-ClientLocalIP': '127.0.0.1',
-          'X-ClientPublicIP': publicIP,
-          'X-MACAddress': '02:00:00:00:00:00',
-          'X-PrivateKey': env.API_KEY,
-        },
+        headers: buildCommonHeaders(undefined, publicIP),
         timeout: 15000,
       },
     );

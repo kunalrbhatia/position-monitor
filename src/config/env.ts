@@ -23,6 +23,9 @@ const envSchema = z.object({
   FEEDER_WS_URL: z.string().default('wss://smartapisocket.angelone.in/smart-stream'),
   MONITOR_WEBHOOK_URL: z.string().default('http://localhost:3000/webhook/ticks'),
   SCRIP_MASTER_PATH: z.string().default('/home/ubuntu/niftyicifalgo/scrip_master.json'),
+  EXIT_RETRY_COOLDOWN_MS: z.coerce.number().default(300000),
+  EXIT_MAX_ATTEMPTS_PER_DAY: z.coerce.number().default(5),
+  RATE_LIMIT_BACKOFF_MS: z.coerce.number().default(900000),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
