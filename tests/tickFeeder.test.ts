@@ -36,22 +36,35 @@ describe('tickFeeder full coverage unit tests', () => {
   });
 
   it('parses valid SmartStream binary packet', () => {
-    const buf = Buffer.alloc(51);
-    buf.writeUInt8(1, 0); // Mode 1
+    const buf = Buffer.alloc(60);
+    buf.writeInt8(1, 0); // Mode 1
     buf.writeUInt8(2, 1); // Exchange NFO = 2
-    buf.write('67046', 2, 25, 'ascii'); // Token
-    buf.writeBigInt64LE(BigInt(12345), 35); // LTP 123.45 in paise
+    buf.write('144389', 2, 'utf8'); // Token
+    buf.writeInt32LE(425, 43); // LTP 4.25 in paise
 
     const parsed = parseSmartStreamPacket(buf);
     expect(parsed).not.toBeNull();
-    expect(parsed?.token).toBe('67046');
-    expect(parsed?.ltp).toBe(123.45);
+    expect(parsed?.token).toBe('144389');
+    expect(parsed?.ltp).toBe(4.25);
     expect(parsed?.exchangeType).toBe(2);
   });
 
-  it('returns null for invalid/short binary packet', () => {
+  it('rejects implausible LTP (> 1,000,000)', () => {
+    const buf = Buffer.alloc(60);
+    buf.writeInt8(1, 0);
+    buf.write('144389', 2, 'utf8');
+    buf.writeInt32LE(150_000_000, 43); // LTP = 1.5M > 10L
+
+    expect(parseSmartStreamPacket(buf)).toBeNull();
+  });
+
+  it('returns null for invalid/short binary packet or wrong mode', () => {
     const shortBuf = Buffer.alloc(5);
     expect(parseSmartStreamPacket(shortBuf)).toBeNull();
+
+    const wrongModeBuf = Buffer.alloc(60);
+    wrongModeBuf.writeInt8(2, 0); // Mode 2 != 1
+    expect(parseSmartStreamPacket(wrongModeBuf)).toBeNull();
   });
 
   it('evaluates market hours correctly', () => {

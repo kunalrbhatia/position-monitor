@@ -167,7 +167,8 @@ describe('Jobs & Integration Coverage Tests', () => {
     positionStore.setPosition(posB);
 
     positionStore.updateTick('99002', 100); // pos-B MTM = 0
-    processTick('99001', 200); // pos-A MTM = +6500 (breaches +1.5% of 100k = +1500)
+    processTick('99001', 200); // pos-A MTM = +6500 (1st check: recorded in breachStateMap)
+    processTick('99001', 200); // pos-A MTM = +6500 (2nd check: breach confirmed & exit executed)
 
     const updatedB = positionStore.getPosition('pos-B');
 
@@ -265,16 +266,18 @@ describe('Jobs & Integration Coverage Tests', () => {
     env.CLIENT_CODE = 'test';
     env.CLIENT_PIN = 'test';
     env.CLIENT_TOTP_PIN = 'test';
+    const paperSpy = jest.spyOn(modeManager, 'isPaperMode').mockReturnValue(false);
 
     // First attempt: should call broker (axios.post)
     const res1 = await executePositionExit(pos, 'PROFIT_TARGET', 5000);
-    expect(res1.success).toBe(false);
+    expect(res1.closedLegs.length).toBe(0);
 
     // Second attempt immediately after: skipped due to cooldown
     const res2 = await executePositionExit(pos, 'PROFIT_TARGET', 5000);
     expect(res2.success).toBe(false);
 
     postSpy.mockRestore();
+    paperSpy.mockRestore();
   });
 
   test('max attempts cap blocks execution after EXIT_MAX_ATTEMPTS_PER_DAY failures', async () => {
@@ -341,6 +344,7 @@ describe('Jobs & Integration Coverage Tests', () => {
 
     const writeSpy = jest.spyOn(fs, 'writeFileSync');
     const axiosModule = await import('axios');
+    const paperSpy = jest.spyOn(modeManager, 'isPaperMode').mockReturnValue(false);
 
     const postSpy = jest.spyOn(axiosModule.default, 'post').mockRejectedValue({
       isAxiosError: true,
@@ -356,5 +360,69 @@ describe('Jobs & Integration Coverage Tests', () => {
 
     writeSpy.mockRestore();
     postSpy.mockRestore();
+    paperSpy.mockRestore();
+  });
+
+  test('executePositionExit Guard C refuses exit when MTM > 5x margin', async () => {
+    const pos: Position = {
+      positionId: 'guard-c-pos',
+      index: 'RELIANCE',
+      status: 'OPEN',
+      marginUtilized: 100000,
+      entryTimestamp: '2026-08-26T09:45:00+05:30',
+      legs: [
+        {
+          legId: 'L1',
+          symbol: 'RELIANCE28OCT25C2500',
+          token: '144389',
+          expiry: '2026-10-28',
+          optionType: 'CE',
+          side: 'BUY',
+          qty: 250,
+          lotSize: 250,
+          entryPrice: 10,
+          status: 'OPEN',
+        },
+      ],
+    };
+    positionStore.setPosition(pos);
+
+    const res = await executePositionExit(pos, 'STOP_LOSS', -17_877_319_518_125);
+    expect(res.success).toBe(false);
+    expect(res.failedLegs).toEqual(['L1']);
+  });
+
+  test('executePositionExit Guard D refuses exit when .kill file exists', async () => {
+    const killPath = path.join(process.cwd(), '.kill');
+    fs.writeFileSync(killPath, '');
+
+    const pos: Position = {
+      positionId: 'guard-d-pos',
+      index: 'RELIANCE',
+      status: 'OPEN',
+      marginUtilized: 100000,
+      entryTimestamp: '2026-08-26T09:45:00+05:30',
+      legs: [
+        {
+          legId: 'L1',
+          symbol: 'RELIANCE28OCT25C2500',
+          token: '144389',
+          expiry: '2026-10-28',
+          optionType: 'CE',
+          side: 'BUY',
+          qty: 250,
+          lotSize: 250,
+          entryPrice: 10,
+          status: 'OPEN',
+        },
+      ],
+    };
+    positionStore.setPosition(pos);
+
+    const res = await executePositionExit(pos, 'STOP_LOSS', -5000);
+    expect(res.success).toBe(false);
+    expect(res.failedLegs).toEqual(['L1']);
+
+    if (fs.existsSync(killPath)) fs.unlinkSync(killPath);
   });
 });

@@ -29,7 +29,7 @@ export function buildSubscribeMessage(tokens: string[], correlationId = 'positio
 export function parseSmartStreamPacket(data: Buffer | ArrayBuffer): ParsedTick | null {
   try {
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    if (buf.length < 10) return null;
+    if (buf.length < 47) return null;
 
     // SmartAPI SmartStream binary protocol structure (LTP Mode / Mode 1):
     // Byte 0: Subscription Mode (1 = LTP)
@@ -37,27 +37,24 @@ export function parseSmartStreamPacket(data: Buffer | ArrayBuffer): ParsedTick |
     // Bytes 2..26: Token string (25 bytes, null-padded)
     // Bytes 27..34 (8 bytes, int64): Sequence Number
     // Bytes 35..42 (8 bytes, int64): Exchange Timestamp
-    // Bytes 43..50 (8 bytes, int64) or 43..46 (4 bytes int32): Last Traded Price (LTP in paise, divide by 100)
-    // Note: depending on packet structure, token is located at offset 2..27
-    const tokenRaw = buf.slice(2, 27).toString('ascii').replace(/\0/g, '').trim();
+    // Bytes 43..46 (4 bytes, int32): Last Traded Price (LTP in paise, divide by 100)
+    const mode = buf.readInt8(0);
+    if (mode !== 1) return null;
+
+    const tokenRaw = buf.toString('utf8', 2, 27).replace(/\0/g, '').trim();
     if (!tokenRaw) return null;
 
-    // Check packet length / LTP offset
-    // In SmartStream protocol for LTP mode (Mode 1, total packet length 43 bytes or 51 bytes):
-    // LTP offset is typically byte 35 or 43 as int64/int32 paise
-    let ltpPaise = 0;
-    if (buf.length >= 43) {
-      // Little-endian int64 or int32 reading
-      const val = buf.readBigInt64LE(35);
-      ltpPaise = Number(val);
-    } else if (buf.length >= 10) {
-      // Fallback fallback parsing
-      const val = buf.readInt32LE(buf.length - 4);
-      ltpPaise = val;
-    }
-
+    const ltpPaise = buf.readInt32LE(43);
     const ltp = ltpPaise / 100;
-    if (isNaN(ltp) || ltp <= 0) return null;
+
+    // Guard A — LTP plausibility check
+    if (!isFinite(ltp) || ltp <= 0 || ltp > 1_000_000) {
+      const hexDump = buf.subarray(0, Math.min(buf.length, 60)).toString('hex');
+      notifyAlert(
+        `[tickFeeder] Rejected implausible LTP: token=${tokenRaw} raw=${hexDump} ltp=${ltp}`,
+      );
+      return null;
+    }
 
     return {
       token: tokenRaw,

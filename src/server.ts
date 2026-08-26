@@ -1,9 +1,11 @@
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import { positionStore } from './store/index.js';
-import { calculatePositionMTM } from './helpers/mtm.js';
+import { calculatePositionMTM, isMTMPlausible } from './helpers/mtm.js';
 import { checkThresholds } from './helpers/thresholds.js';
 import { executePositionExit } from './jobs/exitExecutor.js';
+import { modeManager } from './helpers/modeManager.js';
+import { notifyAlert } from './alerts/notifier.js';
 
 export const app = express();
 app.use(express.json());
@@ -25,7 +27,15 @@ const WebhookBodySchema = z.union([
   }),
 ]);
 
+interface BreachState {
+  type: 'PROFIT_TARGET' | 'STOP_LOSS';
+  firstSeenAt: number;
+}
+const breachStateMap = new Map<string, BreachState>();
+
 export function processTick(token: string, ltp: number): void {
+  if (modeManager.isKillMode() || modeManager.isPanicMode()) return;
+
   const updatedAny = positionStore.updateTick(token, ltp);
   if (!updatedAny) return;
 
@@ -46,9 +56,27 @@ export function processTick(token: string, ltp: number): void {
 
     const thresholdRes = checkThresholds(posId, margin, totalMTM);
     if (thresholdRes.breached && thresholdRes.type) {
+      if (!isMTMPlausible(pos, totalMTM)) {
+        notifyAlert(
+          `[${posId}] MTM sanity check FAILED — blocking exit. totalMTM=${totalMTM}, margin=${margin}`,
+        );
+        continue;
+      }
+
+      // H1 — Breach confirmation across 2 consecutive checks
+      const existing = breachStateMap.get(posId);
+      const now = Date.now();
+      if (!existing || existing.type !== thresholdRes.type) {
+        breachStateMap.set(posId, { type: thresholdRes.type, firstSeenAt: now });
+        continue;
+      }
+
+      // Confirmed breach (seen previously for same type)
       executePositionExit(pos, thresholdRes.type, totalMTM).catch((_err) => {
         // Error logged inside exitExecutor
       });
+    } else {
+      breachStateMap.delete(posId);
     }
   }
 }
