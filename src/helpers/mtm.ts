@@ -1,4 +1,5 @@
 import { Leg, Position } from '../types/position.js';
+import { positionStore } from '../store/index.js';
 
 export function calculateLegMTM(leg: Leg, currentLTP: number): number {
   if (leg.status !== 'OPEN') {
@@ -33,4 +34,10 @@ export function calculatePositionMTM(
   }
 
   return { totalMTM, hasAllLTPs, missingTokens };
+}
+
+export function isMTMPlausible(position: Position, totalMTM: number): boolean {
+  const margin = positionStore.getPositionMargin(position);
+  if (margin === null || margin <= 0) return false;
+  return Math.abs(totalMTM) <= margin * 5;
 }

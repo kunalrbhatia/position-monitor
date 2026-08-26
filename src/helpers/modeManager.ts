@@ -8,7 +8,7 @@ export function getFileSwitchState(filename: string): boolean {
 
 class ModeManager {
   isPaperMode(): boolean {
-    return getFileSwitchState('.paper');
+    return getFileSwitchState('.paper') || process.env.LIVE_ENABLED !== 'true';
   }
 
   isKillMode(): boolean {

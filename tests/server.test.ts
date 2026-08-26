@@ -1,5 +1,6 @@
 import request from 'supertest';
-import { app } from '../src/server.js';
+import { jest } from '@jest/globals';
+import { app, processTick } from '../src/server.js';
 import { modeManager, getFileSwitchState } from '../src/helpers/modeManager.js';
 import { positionStore } from '../src/store/index.js';
 import { startPositionWatcherInterval } from '../src/jobs/positionWatcher.js';
@@ -57,5 +58,16 @@ describe('Server & Endpoints Integration Tests', () => {
   test('positionStore helper getters', () => {
     expect(positionStore.getWatchedTokens()).toBeDefined();
     expect(positionStore.updatePositionStatus('non-existent', 'CLOSED')).toBeUndefined();
+  });
+
+  test('processTick ignores tick processing when kill mode is active', () => {
+    const isKillSpy = jest.spyOn(modeManager, 'isKillMode').mockReturnValue(true);
+    const updateTickSpy = jest.spyOn(positionStore, 'updateTick');
+
+    processTick('45234', 100);
+
+    expect(updateTickSpy).not.toHaveBeenCalled();
+    isKillSpy.mockRestore();
+    updateTickSpy.mockRestore();
   });
 });

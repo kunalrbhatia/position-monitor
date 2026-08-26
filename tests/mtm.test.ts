@@ -1,5 +1,6 @@
-import { calculateLegMTM, calculatePositionMTM } from '../src/helpers/mtm.js';
+import { calculateLegMTM, calculatePositionMTM, isMTMPlausible } from '../src/helpers/mtm.js';
 import { Position, Leg } from '../src/types/position.js';
+import { positionStore } from '../src/store/index.js';
 
 describe('MTM Helper Unit Tests', () => {
   const sampleLegBuy: Leg = {
@@ -71,5 +72,26 @@ describe('MTM Helper Unit Tests', () => {
     const resFull = calculatePositionMTM(position, cacheFull);
     expect(resFull.hasAllLTPs).toBe(true);
     expect(resFull.totalMTM).toBe(1950);
+  });
+
+  test('isMTMPlausible checks MTM against 5x margin', () => {
+    const position: Position = {
+      positionId: 'test-pos-01',
+      index: 'RELIANCE',
+      status: 'OPEN',
+      marginUtilized: 165626.5,
+      entryTimestamp: '2026-08-26T09:45:00+05:30',
+      legs: [sampleLegBuy],
+    };
+
+    positionStore.setPosition(position);
+
+    expect(isMTMPlausible(position, -5000)).toBe(true);
+    expect(isMTMPlausible(position, 800000)).toBe(true);
+    expect(isMTMPlausible(position, -17_877_319_518_125)).toBe(false);
+
+    const noMarginPos: Position = { ...position, marginUtilized: undefined };
+    positionStore.setPosition(noMarginPos);
+    expect(isMTMPlausible(noMarginPos, -100)).toBe(false);
   });
 });

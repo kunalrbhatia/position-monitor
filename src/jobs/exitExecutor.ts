@@ -22,6 +22,24 @@ export async function executePositionExit(
 ): Promise<{ success: boolean; closedLegs: string[]; failedLegs: string[] }> {
   const posId = position.positionId;
 
+  if (modeManager.isPanicMode()) {
+    notifyAlert(`[${posId}] .panic switch is ACTIVE! Exit order placement BLOCKED.`);
+    return { success: false, closedLegs: [], failedLegs: position.legs.map((l) => l.legId) };
+  }
+
+  if (modeManager.isKillMode()) {
+    notifyAlert(`[${posId}] .kill switch is ACTIVE! Exit order placement BLOCKED.`);
+    return { success: false, closedLegs: [], failedLegs: position.legs.map((l) => l.legId) };
+  }
+
+  const margin = positionStore.getPositionMargin(position);
+  if (margin !== null && margin > 0 && Math.abs(currentMTM) > margin * 5) {
+    notifyAlert(
+      `[${posId}] REFUSING exit: MTM ₹${currentMTM.toFixed(2)} is ${(Math.abs(currentMTM) / margin).toFixed(0)}x margin — data error, not a real signal.`,
+    );
+    return { success: false, closedLegs: [], failedLegs: position.legs.map((l) => l.legId) };
+  }
+
   // FIX 2c: In-flight guard
   if (positionStore.isExitInFlight(posId)) {
     return { success: false, closedLegs: [], failedLegs: [] };
@@ -31,11 +49,6 @@ export async function executePositionExit(
 
   try {
     writeMTMLogLine(posId, position.index, currentMTM);
-
-    if (modeManager.isPanicMode()) {
-      notifyAlert(`[${posId}] .panic switch is ACTIVE! Exit order placement BLOCKED.`);
-      return { success: false, closedLegs: [], failedLegs: position.legs.map((l) => l.legId) };
-    }
 
     const todayIST = getISTDateString();
     const nowMs = Date.now();

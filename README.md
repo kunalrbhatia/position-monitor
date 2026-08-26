@@ -13,8 +13,8 @@ This algorithm tracks live position MTM P&L via tick webhooks from Angel One Sma
 - **Tick Ingestion**: Receives tick updates via `POST /webhook/ticks`.
 - **5-Minute Clock-Aligned MTM Logs**: Appends IST timestamped MTM records to `logs/mtm/mtm-{positionId}-{YYYY-MM-DD}.log`.
 - **Control Switches**:
-  - `.paper`: Runs exit logic in paper trading mode without sending broker orders.
-  - `.kill`: Soft pause — blocks scanning/pickup of new position files.
+  - `.paper`: Runs exit logic in paper trading mode without sending broker orders. (Default is PAPER unless `.paper` is absent AND `LIVE_ENABLED=true` in `.env`).
+  - `.kill`: Soft pause — halts tick ingestion/evaluation entirely and blocks exit order placement across all exit paths.
   - `.panic`: Hard stop — blocks exit order placement.
 - **Dedicated Alerts**: Logs warnings/errors (missing marginUtilized, API failures, stale ticks, failed order fills) to `logs/alerts/alerts.log`.
 - **SmartAPI Tick Feeder Daemon**: Connects directly to Angel One SmartAPI WebSocket (`wss://smartapisocket.angelone.in/smart-stream`), subscribing to all tokens from open legs across `data/positions/*.json` files and forwarding live LTP ticks to `POST /webhook/ticks`.
