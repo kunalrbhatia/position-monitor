@@ -32,7 +32,20 @@ const UNDERLYING_SPOT_MAP = {
   ABB: { token: '13', symbol: 'ABB-EQ' },
 };
 
-const MONTHS = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+const MONTHS = {
+  JAN: 0,
+  FEB: 1,
+  MAR: 2,
+  APR: 3,
+  MAY: 4,
+  JUN: 5,
+  JUL: 6,
+  AUG: 7,
+  SEP: 8,
+  OCT: 9,
+  NOV: 10,
+  DEC: 11,
+};
 
 // ---------- Time gating (IST) ----------
 function isTradingTime() {
@@ -147,7 +160,7 @@ function normalCdf(x) {
   const sign = x < 0 ? -1 : 1;
   const absX = Math.abs(x) / Math.sqrt(2);
   const t = 1 / (1 + p * absX);
-  const erf = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX));
+  const erf = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX);
   return 0.5 * (1 + sign * erf);
 }
 
@@ -247,8 +260,14 @@ function buildReport(position, legDetails, deltaInfo) {
   if (deltaInfo && deltaInfo.spot > 0) {
     const absDelta = Math.abs(deltaInfo.net);
     const neutral = absDelta < 50;
-    const bias = neutral ? 'Neutral ✅' : deltaInfo.net > 0 ? 'Delta + (Bullish) 🟢' : 'Delta - (Bearish) 🔴';
-    lines.push(`📐 Net Delta:        ${deltaInfo.net >= 0 ? '+' : ''}${deltaInfo.net.toFixed(1)} (${bias})`);
+    const bias = neutral
+      ? 'Neutral ✅'
+      : deltaInfo.net > 0
+        ? 'Delta + (Bullish) 🟢'
+        : 'Delta - (Bearish) 🔴';
+    lines.push(
+      `📐 Net Delta:        ${deltaInfo.net >= 0 ? '+' : ''}${deltaInfo.net.toFixed(1)} (${bias})`,
+    );
     lines.push(`   Spot: ${deltaInfo.underlying} ₹${fmt(deltaInfo.spot)}`);
   }
   lines.push('─────────────────────────');
