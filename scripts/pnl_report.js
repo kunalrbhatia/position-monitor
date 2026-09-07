@@ -91,37 +91,49 @@ async function login() {
   throw new Error(resp.data?.message || 'Login failed');
 }
 
-// ---------- Fetch LTP for one leg ----------
-async function fetchLTP(jwtToken, publicIP, exchange, symbol, token) {
-  const resp = await axios.post(
-    `${BASE_URL}/rest/secure/angelbroking/order/v1/getLtpData`,
-    {
-      exchange,
-      tradingsymbol: symbol,
-      symboltoken: token,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${jwtToken}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-UserType': 'USER',
-        'X-SourceID': 'WEB',
-        'X-ClientLocalIP': '127.0.0.1',
-        'X-ClientPublicIP': publicIP,
-        'X-MACAddress': '02:00:00:00:00:00',
-        'X-PrivateKey': process.env.API_KEY || process.env.ANGEL_API_KEY,
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-      timeout: 10000,
-    },
-  );
+// ---------- Fetch LTP for one leg (with rate-limit friendly pacing) ----------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  if (resp.data && resp.data.status === true && resp.data.data) {
-    return parseFloat(resp.data.data.ltp);
+async function fetchLTP(jwtToken, publicIP, exchange, symbol, token, retries = 2) {
+  try {
+    const resp = await axios.post(
+      `${BASE_URL}/rest/secure/angelbroking/order/v1/getLtpData`,
+      {
+        exchange,
+        tradingsymbol: symbol,
+        symboltoken: token,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-UserType': 'USER',
+          'X-SourceID': 'WEB',
+          'X-ClientLocalIP': '127.0.0.1',
+          'X-ClientPublicIP': publicIP,
+          'X-MACAddress': '02:00:00:00:00:00',
+          'X-PrivateKey': process.env.API_KEY || process.env.ANGEL_API_KEY,
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+        timeout: 10000,
+      },
+    );
+
+    if (resp.data && resp.data.status === true && resp.data.data) {
+      return parseFloat(resp.data.data.ltp);
+    }
+    throw new Error(resp.data?.message || `LTP fetch failed for ${symbol}`);
+  } catch (err) {
+    // 403 = rate limit — wait and retry with backoff
+    const status = err.response?.status;
+    if ((status === 403 || status === 429) && retries > 0) {
+      await sleep(2000);
+      return fetchLTP(jwtToken, publicIP, exchange, symbol, token, retries - 1);
+    }
+    throw err;
   }
-  throw new Error(resp.data?.message || `LTP fetch failed for ${symbol}`);
 }
 
 // ---------- Greeks (Black-Scholes) ----------
@@ -285,6 +297,7 @@ async function main() {
       const mtm =
         leg.side === 'BUY' ? (ltp - leg.entryPrice) * leg.qty : (leg.entryPrice - ltp) * leg.qty;
       legDetails.push({ symbol: leg.symbol, side: leg.side, qty: leg.qty, ltp, mtm });
+      await sleep(300); // pace requests — Angel rate-limits getLtpData bursts
     }
 
     // Delta-neutrality check: resolve the underlying's spot, compute net delta
