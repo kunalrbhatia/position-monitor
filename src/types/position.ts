@@ -23,10 +23,14 @@ export const ExitStateSchema = z.object({
 
 export const PositionSchema = z.object({
   positionId: z.string(),
-  index: z.enum(['NIFTY', 'SENSEX']),
+  index: z.enum(['NIFTY', 'SENSEX', 'BANKNIFTY']),
   status: z.enum(['OPEN', 'CLOSED']),
   marginUtilized: z.number().positive().nullable().optional(),
   baselineValue: z.number().positive().nullable().optional(),
+  // ptAmount positive number -> profit threshold = that amount; absent/null -> fall back to PROFIT_TARGET_PCT * base
+  ptAmount: z.number().positive().nullable().optional(),
+  // slAmount positive number -> loss threshold = that amount; explicit null -> no SL check at all; absent/undefined -> fall back to STOPLOSS_PCT * base
+  slAmount: z.number().positive().nullable().optional(),
   entryTimestamp: z.string(),
   legs: z.array(LegSchema),
   exitState: ExitStateSchema.optional(),
