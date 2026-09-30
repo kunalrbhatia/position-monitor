@@ -13,21 +13,32 @@ export function checkThresholds(
   currentMTM: number,
   profitTargetPct: number = env.PROFIT_TARGET_PCT,
   stopLossPct: number = env.STOPLOSS_PCT,
+  ptAmount?: number | null,
+  slAmount?: number | null,
 ): ThresholdCheckResult {
-  if (
+  const hasAbsolutePT = typeof ptAmount === 'number' && ptAmount > 0;
+  const isSlDisabled = slAmount === null;
+  const hasAbsoluteSL = typeof slAmount === 'number' && slAmount > 0;
+
+  const isBaselineInvalid =
     baselineValue === undefined ||
     baselineValue === null ||
     isNaN(baselineValue) ||
-    baselineValue <= 0
-  ) {
+    baselineValue <= 0;
+
+  const needsBaselineForPT = !hasAbsolutePT;
+  const needsBaselineForSL = !isSlDisabled && !hasAbsoluteSL;
+
+  if ((needsBaselineForPT || needsBaselineForSL) && isBaselineInvalid) {
     notifyAlert(
       `[${positionId}] baselineValue missing or invalid (${baselineValue}). Threshold checks blocked.`,
     );
     return { breached: false };
   }
 
-  const profitThreshold = baselineValue * (profitTargetPct / 100);
-  const lossThreshold = baselineValue * (stopLossPct / 100);
+  const profitThreshold = hasAbsolutePT
+    ? ptAmount!
+    : (baselineValue as number) * (profitTargetPct / 100);
 
   if (currentMTM >= profitThreshold) {
     return {
@@ -37,12 +48,18 @@ export function checkThresholds(
     };
   }
 
-  if (currentMTM <= -lossThreshold) {
-    return {
-      breached: true,
-      type: 'STOP_LOSS',
-      thresholdValue: -lossThreshold,
-    };
+  if (!isSlDisabled) {
+    const lossThreshold = hasAbsoluteSL
+      ? slAmount!
+      : (baselineValue as number) * (stopLossPct / 100);
+
+    if (currentMTM <= -lossThreshold) {
+      return {
+        breached: true,
+        type: 'STOP_LOSS',
+        thresholdValue: -lossThreshold,
+      };
+    }
   }
 
   return { breached: false };

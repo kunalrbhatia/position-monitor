@@ -7,8 +7,10 @@ This algorithm tracks live position MTM P&L via tick webhooks from Angel One Sma
 ## Features
 
 - **Independent Position File Monitoring**: Every position file in `data/positions/*.json` (`status: "OPEN"`) is tracked as an isolated trade/strategy.
+  - **Supported Indices**: Supports `NIFTY`, `SENSEX`, and `BANKNIFTY`.
   - **`marginUtilized`**: Each position file contains its own `marginUtilized` field representing the total margin required for the legs in that JSON file. If missing, it is automatically calculated via Angel One SmartAPI Batch Margin Calculator API (`/rest/secure/angelbroking/margin/v1/batch`) and saved back into the position JSON file.
-  - **Independent PT / SL**: `+1.5%` Profit Target and `-2.0%` Stop Loss are computed specifically against each file's `marginUtilized`.
+  - **Independent PT / SL**: Default `+1.5%` Profit Target and `-2.0%` Stop Loss are computed specifically against each file's `marginUtilized`.
+  - **Per-Position Absolute PT & SL Override**: Positions can specify `ptAmount` (positive number for absolute rupee profit target) and `slAmount` (positive number for absolute rupee stop loss, or explicit `null` to completely disable stop-loss checks). Absolute thresholds take precedence over percentage-based calculations.
 - **Targeted Exit**: When a threshold breach occurs for a position file, only the legs belonging to that specific position JSON file are exited. Other position files remain unaffected and active.
 - **Tick Ingestion**: Receives tick updates via `POST /webhook/ticks`.
 - **5-Minute Clock-Aligned MTM Logs**: Appends IST timestamped MTM records to `logs/mtm/mtm-{positionId}-{YYYY-MM-DD}.log`.

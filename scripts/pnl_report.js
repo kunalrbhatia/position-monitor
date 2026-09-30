@@ -234,14 +234,20 @@ function buildReport(position, legDetails, deltaInfo) {
   const margin = position.marginUtilized || position.baselineValue || 0;
   const ptPct = parseFloat(process.env.PROFIT_TARGET_PCT || '1.5');
   const slPct = parseFloat(process.env.STOPLOSS_PCT || '2.0');
-  const pt = margin * (ptPct / 100);
-  const sl = margin * (slPct / 100);
+
+  const hasAbsolutePT = typeof position.ptAmount === 'number' && position.ptAmount > 0;
+  const pt = hasAbsolutePT ? position.ptAmount : margin * (ptPct / 100);
+
+  const isSlDisabled = position.slAmount === null;
+  const hasAbsoluteSL = typeof position.slAmount === 'number' && position.slAmount > 0;
+  const sl = isSlDisabled ? null : hasAbsoluteSL ? position.slAmount : margin * (slPct / 100);
+
   const totalMTM = legDetails.reduce((s, l) => s + l.mtm, 0);
   const pct = margin > 0 ? (totalMTM / margin) * 100 : 0;
 
   let status = 'Monitoring';
   if (totalMTM >= pt) status = 'Target Achieved 🚀';
-  else if (totalMTM <= -sl) status = 'Stop Loss Hit 🛑';
+  else if (!isSlDisabled && sl !== null && totalMTM <= -sl) status = 'Stop Loss Hit 🛑';
 
   const lines = [];
   lines.push('┏━━━━━━━━━━━━━━━━━━━━━━━━━┓');
@@ -255,7 +261,11 @@ function buildReport(position, legDetails, deltaInfo) {
   lines.push('');
   lines.push('─────────────────────────');
   lines.push(`🎯 PT (Target):       ₹${fmt(pt)} ${totalMTM >= pt ? '✅' : ''}`);
-  lines.push(`🛑 SL (Stop Loss):    ₹${fmt(sl)} ${totalMTM <= -sl ? '✅' : ''}`);
+  if (isSlDisabled) {
+    lines.push(`🛑 SL (Stop Loss):    disabled`);
+  } else {
+    lines.push(`🛑 SL (Stop Loss):    ₹${fmt(sl)} ${totalMTM <= -sl ? '✅' : ''}`);
+  }
   lines.push(`💼 Margin Utilized:   ₹${fmt(margin)}`);
   if (deltaInfo && deltaInfo.spot > 0) {
     const absDelta = Math.abs(deltaInfo.net);

@@ -54,7 +54,15 @@ export function processTick(token: string, ltp: number): void {
     const { totalMTM, hasAllLTPs } = calculatePositionMTM(pos, ltpCache);
     if (!hasAllLTPs) continue;
 
-    const thresholdRes = checkThresholds(posId, margin, totalMTM);
+    const thresholdRes = checkThresholds(
+      posId,
+      margin,
+      totalMTM,
+      undefined,
+      undefined,
+      pos.ptAmount,
+      pos.slAmount,
+    );
     if (thresholdRes.breached && thresholdRes.type) {
       if (!isMTMPlausible(pos, totalMTM)) {
         notifyAlert(

@@ -26,7 +26,15 @@ export async function runPositionWatcher(): Promise<void> {
 
       const { totalMTM, hasAllLTPs } = calculatePositionMTM(pos, ltpCache);
       if (hasAllLTPs) {
-        const thresholdRes = checkThresholds(posId, margin, totalMTM);
+        const thresholdRes = checkThresholds(
+          posId,
+          margin,
+          totalMTM,
+          undefined,
+          undefined,
+          pos.ptAmount,
+          pos.slAmount,
+        );
         if (thresholdRes.breached && thresholdRes.type) {
           await executePositionExit(pos, thresholdRes.type, totalMTM);
         }

@@ -29,4 +29,57 @@ describe('Thresholds Unit Tests', () => {
     expect(checkThresholds('pos1', 0, 5000)).toEqual({ breached: false });
     expect(checkThresholds('pos1', -100, 5000)).toEqual({ breached: false });
   });
+
+  test('absolute PT hit with baselineValue = null triggers PROFIT_TARGET without baselineValue', () => {
+    const res = checkThresholds('pos1', null, 43200, undefined, undefined, 43200, null);
+    expect(res).toEqual({
+      breached: true,
+      type: 'PROFIT_TARGET',
+      thresholdValue: 43200,
+    });
+  });
+
+  test('slAmount = null with large negative MTM has breached: false (SL disabled)', () => {
+    const res = checkThresholds('pos1', baseline, -500000, undefined, undefined, undefined, null);
+    expect(res).toEqual({ breached: false });
+  });
+
+  test('legacy call (no overrides) still uses percentage behaviour', () => {
+    expect(checkThresholds('pos1', baseline, 1500)).toEqual({
+      breached: true,
+      type: 'PROFIT_TARGET',
+      thresholdValue: 1500,
+    });
+    expect(checkThresholds('pos1', baseline, -2000)).toEqual({
+      breached: true,
+      type: 'STOP_LOSS',
+      thresholdValue: -2000,
+    });
+  });
+
+  test('absolute slAmount triggers STOP_LOSS at the right value', () => {
+    const res = checkThresholds('pos1', baseline, -3000, undefined, undefined, undefined, 3000);
+    expect(res).toEqual({
+      breached: true,
+      type: 'STOP_LOSS',
+      thresholdValue: -3000,
+    });
+    expect(checkThresholds('pos1', baseline, -2500, undefined, undefined, undefined, 3000)).toEqual(
+      {
+        breached: false,
+      },
+    );
+  });
+
+  test('absolute PT takes precedence over percentage', () => {
+    // baseline 100000, default PT is 1500, but absolute ptAmount is 5000
+    expect(checkThresholds('pos1', baseline, 2000, 1.5, 2.0, 5000, undefined)).toEqual({
+      breached: false,
+    });
+    expect(checkThresholds('pos1', baseline, 5000, 1.5, 2.0, 5000, undefined)).toEqual({
+      breached: true,
+      type: 'PROFIT_TARGET',
+      thresholdValue: 5000,
+    });
+  });
 });
