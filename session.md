@@ -80,3 +80,12 @@ This file tracks all modifications, additions, and procedures executed in the re
 - Exchange mapping centralised in `exchangeForIndex()` — one place, no duplicated ternaries.
 - GOLDM stored with `qty: 10` / `lotSize: 100` because MCX quotes the premium per 10 g in a 100 g lot; using 100 inflates MTM 10×.
 - Builds must move off the 1 GB host: two `tsc` runs took the machine (and sshd) down.
+
+---
+
+## 2026-10-30 — Banner leads with NET P&L (the figure the engine exits on)
+
+- Swapped the two P&L lines in `scripts/pnl_report.js`: positions that carry realised money now show `🧮 Net incl. realised` directly under the position id (with a % of margin), and `💰 Total PnL (open)` moves into the threshold block below `📜 Adjustments (realised)`.
+- Rationale: the exit path fires on **net**; leading with the open mark (₹38,984 vs ₹15,341 on the BANKNIFTY fly) made the card read as if the target were close when it was not.
+- Positions with no realised P&L are unchanged — they still print a single `💰 Total PnL` line.
+- Verified both paths on live data (BANKNIFTY = realised, NIFTY BF = none).
