@@ -15,10 +15,55 @@ const pos = {
   slAmount: null,
   entryTimestamp: '2026-10-30T00:00:00.000Z',
   legs: [
-    { legId: 'L1', symbol: 'BANKNIFTY23NOV2655500CE', token: 't1', expiry: '23NOV2026', optionType: 'CE', side: 'SELL', qty, lotSize: 30, entryPrice: 1227.38, status: 'OPEN' },
-    { legId: 'L2', symbol: 'BANKNIFTY23NOV2655500PE', token: 't2', expiry: '23NOV2026', optionType: 'PE', side: 'SELL', qty, lotSize: 30, entryPrice: 1052.71, status: 'OPEN' },
-    { legId: 'L3', symbol: 'BANKNIFTY23NOV2653200PE', token: 't3', expiry: '23NOV2026', optionType: 'PE', side: 'BUY', qty, lotSize: 30, entryPrice: 410.45, status: 'OPEN' },
-    { legId: 'C1', symbol: 'BANKNIFTY23NOV2657800CE', token: 't4', expiry: '23NOV2026', optionType: 'CE', side: 'BUY', qty, lotSize: 30, entryPrice: 314.4, realisedPnl: -23643, status: 'CLOSED' },
+    {
+      legId: 'L1',
+      symbol: 'BANKNIFTY23NOV2655500CE',
+      token: 't1',
+      expiry: '23NOV2026',
+      optionType: 'CE',
+      side: 'SELL',
+      qty,
+      lotSize: 30,
+      entryPrice: 1227.38,
+      status: 'OPEN',
+    },
+    {
+      legId: 'L2',
+      symbol: 'BANKNIFTY23NOV2655500PE',
+      token: 't2',
+      expiry: '23NOV2026',
+      optionType: 'PE',
+      side: 'SELL',
+      qty,
+      lotSize: 30,
+      entryPrice: 1052.71,
+      status: 'OPEN',
+    },
+    {
+      legId: 'L3',
+      symbol: 'BANKNIFTY23NOV2653200PE',
+      token: 't3',
+      expiry: '23NOV2026',
+      optionType: 'PE',
+      side: 'BUY',
+      qty,
+      lotSize: 30,
+      entryPrice: 410.45,
+      status: 'OPEN',
+    },
+    {
+      legId: 'C1',
+      symbol: 'BANKNIFTY23NOV2657800CE',
+      token: 't4',
+      expiry: '23NOV2026',
+      optionType: 'CE',
+      side: 'BUY',
+      qty,
+      lotSize: 30,
+      entryPrice: 314.4,
+      realisedPnl: -23643,
+      status: 'CLOSED',
+    },
   ],
 };
 
@@ -38,12 +83,16 @@ const openOnly = pos.legs
 const realised = realisedPnlOf(pos);
 const net = openOnly + realised;
 
-console.log(`open-only MTM (old behaviour) : ${openOnly.toFixed(2)}   -> PT fired? ${openOnly >= pos.ptAmount ? 'YES (the bug)' : 'no'}`);
+console.log(
+  `open-only MTM (old behaviour) : ${openOnly.toFixed(2)}   -> PT fired? ${openOnly >= pos.ptAmount ? 'YES (the bug)' : 'no'}`,
+);
 console.log(`realised on closed legs       : ${realised.toFixed(2)}`);
 console.log(`MTM now used for thresholds   : ${totalMTM.toFixed(2)}  (hasAllLTPs=${hasAllLTPs})`);
 console.log(`expected net                  : ${net.toFixed(2)}`);
 console.log(`PT                            : ${pos.ptAmount}`);
-console.log(`would fire PT?                : ${totalMTM >= pos.ptAmount ? 'YES  <-- STILL BROKEN' : 'NO   <-- fixed'}`);
+console.log(
+  `would fire PT?                : ${totalMTM >= pos.ptAmount ? 'YES  <-- STILL BROKEN' : 'NO   <-- fixed'}`,
+);
 const ok = Math.abs(totalMTM - net) < 1 && openOnly >= pos.ptAmount && totalMTM < pos.ptAmount;
 console.log(ok ? 'RESULT: PASS' : 'RESULT: FAIL');
 process.exitCode = ok ? 0 : 1;

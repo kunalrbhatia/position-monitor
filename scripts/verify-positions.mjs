@@ -28,7 +28,10 @@ console.log(`broker open rows: ${broker.size}\n`);
 const seen = new Set();
 let problems = 0;
 
-for (const f of fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).sort()) {
+for (const f of fs
+  .readdirSync(DIR)
+  .filter((f) => f.endsWith('.json'))
+  .sort()) {
   const pos = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8'));
   const mult = MULT[pos.index] || 1;
   console.log(`== ${pos.positionId}  (index ${pos.index}, x${mult})`);
@@ -46,7 +49,9 @@ for (const f of fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).sort()) {
     const ok = actual === expect;
     // P&L check uses the file qty (10 for GOLDM), not qty x mult: the broker's netqty is in grams
     // but its pnl already applies the per-lot rupee multiplier.
-    const mtm = (leg.side === 'BUY' ? Number(row.ltp) - leg.entryPrice : leg.entryPrice - Number(row.ltp)) * leg.qty;
+    const mtm =
+      (leg.side === 'BUY' ? Number(row.ltp) - leg.entryPrice : leg.entryPrice - Number(row.ltp)) *
+      leg.qty;
     const diff = mtm - Number(row.pnl);
     const mtmOk = Math.abs(diff) < 1;
     if (!mtmOk) problems++;
@@ -62,7 +67,9 @@ console.log('\n== broker rows NOT covered by any OPEN file leg ==');
 let extra = 0;
 for (const [sym, r] of broker) {
   if (!seen.has(sym)) {
-    console.log(`   ! ${sym.padEnd(24)} netqty=${String(r.netqty).padStart(5)} ltp=${r.ltp} pnl=${r.pnl}`);
+    console.log(
+      `   ! ${sym.padEnd(24)} netqty=${String(r.netqty).padStart(5)} ltp=${r.ltp} pnl=${r.pnl}`,
+    );
     extra++;
   }
 }
