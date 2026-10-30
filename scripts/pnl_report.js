@@ -323,9 +323,20 @@ function buildReport(position, legDetails, deltaInfo, realised = 0) {
   lines.push('┗━━━━━━━━━━━━━━━━━━━━━━━━━┛');
   lines.push('');
   lines.push(`📌 Position: ${position.positionId}`);
-  lines.push(
-    `💰 Total PnL:        ${totalMTM >= 0 ? '+' : ''}₹${fmt(totalMTM)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`,
-  );
+  // The exit path fires on NET (open + realised), so lead with the figure the engine acts on and
+  // keep the open-book number further down. Without realised money the two are identical, so only
+  // one line is printed in that case.
+  const hasRealised = Math.abs(realised) >= 0.005;
+  const netPct = margin > 0 ? (net / margin) * 100 : 0;
+  if (hasRealised) {
+    lines.push(
+      `🧮 Net incl. realised: ${net >= 0 ? '+' : ''}₹${fmt(net)} (${netPct >= 0 ? '+' : ''}${netPct.toFixed(1)}%)`,
+    );
+  } else {
+    lines.push(
+      `💰 Total PnL:        ${totalMTM >= 0 ? '+' : ''}₹${fmt(totalMTM)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`,
+    );
+  }
   lines.push('');
   lines.push('─────────────────────────');
   lines.push(`🎯 PT (Target):       ₹${fmt(pt)} ${net >= pt ? '✅' : ''}`);
@@ -337,10 +348,11 @@ function buildReport(position, legDetails, deltaInfo, realised = 0) {
   lines.push(`💼 Margin Utilized:   ₹${fmt(margin)}`);
   // Adjustments closed on earlier days: their money is already banked, so show it separately
   // and give the net — the open MTM alone understates (or overstates) the trade's real result.
-  if (realised && Math.abs(realised) >= 0.005) {
+  if (hasRealised) {
     lines.push(`📜 Adjustments (realised): ${realised >= 0 ? '+' : ''}₹${fmt(realised)}`);
-    const net = totalMTM + realised;
-    lines.push(`🧮 Net incl. realised:    ${net >= 0 ? '+' : ''}₹${fmt(net)}`);
+    lines.push(
+      `💰 Total PnL (open):    ${totalMTM >= 0 ? '+' : ''}₹${fmt(totalMTM)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`,
+    );
   }
   if (deltaInfo && deltaInfo.spot > 0) {
     const absDelta = Math.abs(deltaInfo.net);
