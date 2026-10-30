@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Position } from '../types/position.js';
+import { Position, exchangeForIndex } from '../types/position.js';
 import { modeManager } from '../helpers/modeManager.js';
 import { positionStore } from '../store/index.js';
 import { getBrokerSessionToken } from '../helpers/login.js';
@@ -119,7 +119,7 @@ export async function executePositionExit(
       }
 
       const exitSide: 'BUY' | 'SELL' = leg.side === 'BUY' ? 'SELL' : 'BUY';
-      const exchange = position.index === 'SENSEX' ? 'BFO' : 'NFO';
+      const exchange = exchangeForIndex(position.index);
 
       const orderPayload: OrderPayload = {
         tradingsymbol: leg.symbol,

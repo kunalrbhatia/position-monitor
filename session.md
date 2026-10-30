@@ -47,3 +47,36 @@ This file tracks all modifications, additions, and procedures executed in the re
 - Verified PR description using `node .agents/skills/pr-description-check/scripts/verify.cjs`.
 - Monitored GitHub CI status using `node .agents/skills/verify-pr-status/scripts/verify-checks.cjs` until all checks passed.
 - Pull Request created: [#14](https://github.com/kunalrbhatia/position-monitor/pull/14).
+
+---
+
+## 2026-10-30 — Realised-Aware MTM (fix: closing a losing leg faked a profit-target hit) + MCX/GOLDM support
+
+### Context & Requirements
+
+- **Incident:** on 30 Oct the BANKNIFTY iron fly auto-exited with real orders at 10:52 IST. Kunal had just closed the 57,800 CE wing for −₹23,643. `calculatePositionMTM()` summed **OPEN legs only**, so the closed losing leg's negative mark disappeared instead of being booked: MTM jumped ₹20,029 → ₹44,110, crossed the ₹43,200 absolute PT, and `PROFIT_TARGET` flattened the whole fly (+₹43,805.70 realised on four legs).
+- **Requirement:** thresholds must measure **net** P&L (open + realised) so taking a loss can never inflate the mark into a target hit; and a commodity (MCX/GOLDM) book must be trackable with the same tooling.
+
+### Work Executed
+
+1. **`src/helpers/mtm.ts`** — added `realisedPnlOf(position)` (sums `realisedPnl` over non-OPEN legs); `calculatePositionMTM()` now starts from that figure before adding open-leg marks.
+2. **`src/jobs/mtmLogger.ts`** — optional suffix on the MTM log line: `(net incl. realised ±X)` when a position carries realised P&L, so historical logs cannot be misread as open-only.
+3. **`scripts/pnl_report.js`** — status / PT / SL check-marks now evaluate **net** (open + realised), matching the engine; per-position exchange routing (NFO / BFO / **MCX**); GOLDM spot proxy (nearest futures); `realisedPnl` carried into the `@@SNAPSHOT@@` payload.
+4. **`src/types/position.ts`** — `index` enum gains `GOLDM`; `realisedPnl` added to `LegSchema` (adjustments closed on earlier days have no trade-book fills left to price); new `exchangeForIndex()` helper (GOLDM/SILVER/CRUDEOIL → MCX).
+5. **`src/helpers/api.ts`, `src/helpers/margin.ts`, `src/jobs/exitExecutor.ts`, `src/store/index.ts`** — `MCX` added to the order/margin exchange unions and both call sites switched to `exchangeForIndex()`, so an exit can never be fired at the wrong exchange.
+6. **Tests** — `tests/mtm.test.ts` (no closed legs / with realised / missing realised / unchanged-open behaviour) and `tests/jobs.test.ts` (log suffix).
+7. **New operational scripts** — `scripts/verify-realised-mtm.mjs` (replays the incident numbers and asserts old behaviour fires the PT while the fixed one does not) and `scripts/verify-positions.mjs` (per-leg broker reconciliation, accounts for the GOLDM ×10 multiplier).
+
+### Sanity Checks & Verification Steps
+
+- `node scripts/verify-realised-mtm.mjs` → **PASS**: open-only MTM 44,109.90 would fire the ₹43,200 PT; realised-aware MTM 20,466.90 does not.
+- `pnpm run build` (`tsc -p tsconfig.build.json`) — clean.
+- Broker reconciliation `node scripts/verify-positions.mjs` → 0 mismatches, 0 untracked rows, per-leg MTM Δ₹0.00 against the broker's own `pnl`.
+- Jest **not** run on the 1 GB algo box (deliberate) — CI runs the suite.
+
+### Key Decisions
+
+- **Threshold semantics = NET P&L** (open + realised), identical to the banner's `🧮 Net incl. realised`.
+- Exchange mapping centralised in `exchangeForIndex()` — one place, no duplicated ternaries.
+- GOLDM stored with `qty: 10` / `lotSize: 100` because MCX quotes the premium per 10 g in a 100 g lot; using 100 inflates MTM 10×.
+- Builds must move off the 1 GB host: two `tsc` runs took the machine (and sshd) down.

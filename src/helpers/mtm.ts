@@ -12,11 +12,26 @@ export function calculateLegMTM(leg: Leg, currentLTP: number): number {
   }
 }
 
+/** Realised rupees already banked on legs that were closed earlier in this position. */
+export function realisedPnlOf(position: Position): number {
+  return position.legs.reduce(
+    (sum, leg) =>
+      leg.status === 'OPEN'
+        ? sum
+        : sum + (typeof leg.realisedPnl === 'number' ? leg.realisedPnl : 0),
+    0,
+  );
+}
+
 export function calculatePositionMTM(
   position: Position,
   ltpCache: Map<string, number>,
 ): { totalMTM: number; hasAllLTPs: boolean; missingTokens: string[] } {
-  let totalMTM = 0;
+  // Start from the money already realised on closed legs. Without this, closing a LOSING leg
+  // removes its negative mark from the total instead of booking the loss, which inflates MTM by
+  // the size of that loss — enough to fake a profit-target breach (real incident: BANKNIFTY
+  // iron fly, 30 Oct 2026 — a −₹23,643 wing close lifted MTM 20,029 → 44,110 and auto-exited).
+  let totalMTM = realisedPnlOf(position);
   let hasAllLTPs = true;
   const missingTokens: string[] = [];
 

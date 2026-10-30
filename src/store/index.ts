@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Position, PositionSchema } from '../types/position.js';
+import { Position, PositionSchema, exchangeForIndex } from '../types/position.js';
 import { notifyAlert } from '../alerts/notifier.js';
 
 export interface TickInfo {
@@ -171,7 +171,7 @@ class PositionStore {
       const legParams: import('../helpers/margin.js').PositionMarginLegParam[] = pos.legs
         .filter((l) => l.status === 'OPEN')
         .map((l) => ({
-          exchange: pos.index === 'SENSEX' ? 'BFO' : 'NFO',
+          exchange: exchangeForIndex(pos.index),
           token: l.token,
           qty: l.qty,
           entryPrice: l.entryPrice,

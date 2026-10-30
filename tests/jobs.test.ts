@@ -426,3 +426,52 @@ describe('Jobs & Integration Coverage Tests', () => {
     if (fs.existsSync(killPath)) fs.unlinkSync(killPath);
   });
 });
+
+describe('runMTMLogger — realised-aware log line', () => {
+  test('appends the net-incl-realised suffix when closed legs carry realisedPnl', () => {
+    const pos: Position = {
+      positionId: 'logger-realised',
+      index: 'BANKNIFTY',
+      status: 'OPEN',
+      marginUtilized: 400000,
+      entryTimestamp: '2026-10-30T09:00:00+05:30',
+      legs: [
+        {
+          legId: 'L1',
+          symbol: 'BANKNIFTY23NOV2655500CE',
+          token: '99011',
+          expiry: '2026-11-23',
+          optionType: 'CE',
+          side: 'SELL',
+          qty: 90,
+          lotSize: 30,
+          entryPrice: 1227.38,
+          status: 'OPEN',
+        },
+        {
+          legId: 'C1',
+          symbol: 'BANKNIFTY23NOV2657800CE',
+          token: '99012',
+          expiry: '2026-11-23',
+          optionType: 'CE',
+          side: 'BUY',
+          qty: 90,
+          lotSize: 30,
+          entryPrice: 314.4,
+          realisedPnl: -23643,
+          status: 'CLOSED',
+        },
+      ],
+    };
+    positionStore.setPosition(pos);
+    positionStore.updateTick('99011', 982.27);
+    runMTMLogger();
+    expect(positionStore.hasFreshTickSinceLastCheck('logger-realised')).toBe(false);
+
+    const { ymd } = formatISTLogDate();
+    const logFile = path.join(env.MTM_LOG_DIR, `mtm-logger-realised-${ymd}.log`);
+    const line = fs.readFileSync(logFile, 'utf-8').trim().split('\n').pop() as string;
+    expect(line).toContain('MTM = -1583.10');
+    expect(line).toContain('net incl. realised -23643');
+  });
+});

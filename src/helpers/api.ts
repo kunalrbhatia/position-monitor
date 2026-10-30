@@ -5,7 +5,7 @@ export interface OrderPayload {
   tradingsymbol: string;
   symboltoken: string;
   transactiontype: 'BUY' | 'SELL';
-  exchange: 'NFO' | 'BFO';
+  exchange: 'NFO' | 'BFO' | 'MCX';
   ordertype: 'MARKET';
   producttype: 'CARRYFORWARD' | 'INTRADAY';
   quantity: number;
