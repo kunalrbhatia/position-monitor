@@ -471,7 +471,7 @@ describe('runMTMLogger — realised-aware log line', () => {
     const { ymd } = formatISTLogDate();
     const logFile = path.join(env.MTM_LOG_DIR, `mtm-logger-realised-${ymd}.log`);
     const line = fs.readFileSync(logFile, 'utf-8').trim().split('\n').pop() as string;
-    expect(line).toContain('MTM = 22059.90');
+    expect(line).toContain('MTM = -1583.10');
     expect(line).toContain('net incl. realised -23643');
   });
 });

@@ -156,7 +156,7 @@ describe('Realised-aware MTM (closed legs must not vanish from the P&L)', () => 
       new Map([['t1', 982.27]]),
     );
     expect(hasAllLTPs).toBe(true);
-    expect(totalMTM).toBe(22059.9 - 23643);
+    expect(totalMTM).toBeCloseTo(22059.9 - 23643, 2);
     // The bug being fixed: open-only MTM (+22,059.90) is under the ₹43,200 PT, but a far larger
     // open mark used to sail past it once the losing leg disappeared from the file.
     expect(totalMTM).toBeLessThan(43200);
@@ -164,6 +164,6 @@ describe('Realised-aware MTM (closed legs must not vanish from the P&L)', () => 
 
   test('calculatePositionMTM is unchanged for positions with no closed legs', () => {
     const { totalMTM } = calculatePositionMTM(makePos([openLeg]), new Map([['t1', 982.27]]));
-    expect(totalMTM).toBe(22059.9);
+    expect(totalMTM).toBeCloseTo(22059.9, 2);
   });
 });
