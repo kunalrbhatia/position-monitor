@@ -30,7 +30,28 @@ const UNDERLYING_SPOT_MAP = {
   SENSEX: { token: '99926000', symbol: 'Nifty 50' },
   RELIANCE: { token: '2885', symbol: 'RELIANCE-EQ' },
   ABB: { token: '13', symbol: 'ABB-EQ' },
+  // Commodities have no index spot — use the nearest GOLDM futures as the underlying proxy.
+  GOLDM: { token: '571445', symbol: 'GOLDM05NOV26FUT', exchange: 'MCX' },
 };
+
+// Commodity F&O lives on MCX, SENSEX on BFO, everything else on NFO.
+function exchangeFor(index) {
+  if (index === 'SENSEX') return 'BFO';
+  if (
+    [
+      'GOLDM',
+      'GOLDMINI',
+      'SILVER',
+      'SILVERMINI',
+      'CRUDEOIL',
+      'CRUDEOILMINI',
+      'NATURALGAS',
+    ].includes(index)
+  ) {
+    return 'MCX';
+  }
+  return 'NFO';
+}
 
 const MONTHS = {
   JAN: 0,
@@ -150,6 +171,47 @@ async function fetchLTP(jwtToken, publicIP, exchange, symbol, token, retries = 2
 }
 
 // ---------- Greeks (Black-Scholes) ----------
+// Today"s fills — the only place an EXIT price exists: exitExecutor flips a leg to CLOSED without
+// recording what it filled at. Angel scopes this to the current day, so the ledger accumulates it.
+async function fetchTradeBook(jwtToken, publicIP) {
+  try {
+    const resp = await axios.post(
+      `${BASE_URL}/rest/secure/angelbroking/order/v1/getTradeBook`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-UserType': 'USER',
+          'X-SourceID': 'WEB',
+          'X-ClientLocalIP': '127.0.0.1',
+          'X-ClientPublicIP': publicIP,
+          'X-MACAddress': '02:00:00:00:00:00',
+          'X-PrivateKey': process.env.API_KEY || process.env.ANGEL_API_KEY,
+          'User-Agent': 'Mozilla/5.0',
+        },
+        timeout: 10000,
+      },
+    );
+    const rows = resp.data && Array.isArray(resp.data.data) ? resp.data.data : [];
+    return rows
+      .map((t) => ({
+        symbol: t.tradingsymbol,
+        side: t.transactiontype,
+        // Angel names the filled quantity `fillsize`; there is no `quantity` on a trade row.
+        qty: Number(t.fillsize || t.fillsquantity || t.quantity || 0),
+        price: Number(t.fillprice || t.averageprice || 0),
+        time: t.filltime || '',
+        orderId: t.orderid || '',
+        fillId: t.fillid || '',
+      }))
+      .filter((t) => t.symbol && t.qty > 0 && t.price > 0);
+  } catch {
+    return null; // best-effort: a ledger gap beats a failed banner
+  }
+}
+
 function normalCdf(x) {
   const a1 = 0.254829592,
     a2 = -0.284496736,
@@ -230,7 +292,7 @@ function fmt(n) {
   return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function buildReport(position, legDetails, deltaInfo) {
+function buildReport(position, legDetails, deltaInfo, realised = 0) {
   const margin = position.marginUtilized || position.baselineValue || 0;
   const ptPct = parseFloat(process.env.PROFIT_TARGET_PCT || '1.5');
   const slPct = parseFloat(process.env.STOPLOSS_PCT || '2.0');
@@ -245,9 +307,15 @@ function buildReport(position, legDetails, deltaInfo) {
   const totalMTM = legDetails.reduce((s, l) => s + l.mtm, 0);
   const pct = margin > 0 ? (totalMTM / margin) * 100 : 0;
 
+  // Thresholds are judged on NET P&L (open + realised on closed legs) — the same figure the
+  // monitor's exit path uses. Displaying "Target Achieved" off the open mark alone made the
+  // banner disagree with the engine (30 Oct: banner said hit at +43,313 while the monitor,
+  // correctly netting a −23,643 wing loss, saw +19,670 and did nothing).
+  const net = totalMTM + realised;
+
   let status = 'Monitoring';
-  if (totalMTM >= pt) status = 'Target Achieved 🚀';
-  else if (!isSlDisabled && sl !== null && totalMTM <= -sl) status = 'Stop Loss Hit 🛑';
+  if (net >= pt) status = 'Target Achieved 🚀';
+  else if (!isSlDisabled && sl !== null && net <= -sl) status = 'Stop Loss Hit 🛑';
 
   const lines = [];
   lines.push('┏━━━━━━━━━━━━━━━━━━━━━━━━━┓');
@@ -260,13 +328,20 @@ function buildReport(position, legDetails, deltaInfo) {
   );
   lines.push('');
   lines.push('─────────────────────────');
-  lines.push(`🎯 PT (Target):       ₹${fmt(pt)} ${totalMTM >= pt ? '✅' : ''}`);
+  lines.push(`🎯 PT (Target):       ₹${fmt(pt)} ${net >= pt ? '✅' : ''}`);
   if (isSlDisabled) {
     lines.push(`🛑 SL (Stop Loss):    disabled`);
   } else {
-    lines.push(`🛑 SL (Stop Loss):    ₹${fmt(sl)} ${totalMTM <= -sl ? '✅' : ''}`);
+    lines.push(`🛑 SL (Stop Loss):    ₹${fmt(sl)} ${net <= -sl ? '✅' : ''}`);
   }
   lines.push(`💼 Margin Utilized:   ₹${fmt(margin)}`);
+  // Adjustments closed on earlier days: their money is already banked, so show it separately
+  // and give the net — the open MTM alone understates (or overstates) the trade's real result.
+  if (realised && Math.abs(realised) >= 0.005) {
+    lines.push(`📜 Adjustments (realised): ${realised >= 0 ? '+' : ''}₹${fmt(realised)}`);
+    const net = totalMTM + realised;
+    lines.push(`🧮 Net incl. realised:    ${net >= 0 ? '+' : ''}₹${fmt(net)}`);
+  }
   if (deltaInfo && deltaInfo.spot > 0) {
     const absDelta = Math.abs(deltaInfo.net);
     const neutral = absDelta < 50;
@@ -305,6 +380,8 @@ async function main() {
 
   const { jwtToken, publicIP } = await login();
   const reports = [];
+  const snapshots = [];
+  const tradeBook = await fetchTradeBook(jwtToken, publicIP);
 
   for (const file of files) {
     const filePath = path.join(POSITIONS_DIR, file);
@@ -322,7 +399,13 @@ async function main() {
 
     const legDetails = [];
     for (const leg of openLegs) {
-      const ltp = await fetchLTP(jwtToken, publicIP, 'NFO', leg.symbol, leg.token);
+      const ltp = await fetchLTP(
+        jwtToken,
+        publicIP,
+        exchangeFor(position.index),
+        leg.symbol,
+        leg.token,
+      );
       const mtm =
         leg.side === 'BUY' ? (ltp - leg.entryPrice) * leg.qty : (leg.entryPrice - ltp) * leg.qty;
       legDetails.push({ symbol: leg.symbol, side: leg.side, qty: leg.qty, ltp, mtm });
@@ -335,7 +418,13 @@ async function main() {
       const underlying = deriveUnderlying(openLegs[0]?.symbol || '');
       const spotCfg = underlying ? UNDERLYING_SPOT_MAP[underlying] : null;
       if (spotCfg) {
-        const spot = await fetchLTP(jwtToken, publicIP, 'NSE', spotCfg.symbol, spotCfg.token);
+        const spot = await fetchLTP(
+          jwtToken,
+          publicIP,
+          spotCfg.exchange || 'NSE',
+          spotCfg.symbol,
+          spotCfg.token,
+        );
         if (spot > 0) {
           const { net } = computeNetDelta(openLegs, spot);
           deltaInfo = { net, spot, underlying };
@@ -345,11 +434,61 @@ async function main() {
       deltaInfo = null; // delta check is best-effort — never fail the report over it
     }
 
-    reports.push(buildReport(position, legDetails, deltaInfo));
+    reports.push(
+      buildReport(
+        position,
+        legDetails,
+        deltaInfo,
+        position.legs
+          .filter((l) => l.status !== 'OPEN' && typeof l.realisedPnl === 'number')
+          .reduce((s, l) => s + l.realisedPnl, 0),
+      ),
+    );
+
+    // Machine-readable snapshot for the payoff chart and the realisation ledger. One login, so
+    // Angel sees one run not two. ALL legs, not just open ones — closed legs are the book history.
+    const ltpBySymbol = new Map(legDetails.map((d) => [d.symbol, d.ltp]));
+    snapshots.push({
+      positionId: position.positionId,
+      index: position.index,
+      status: position.status,
+      expiry: openLegs[0]?.expiry || null,
+      spot: deltaInfo ? deltaInfo.spot : null,
+      legs: position.legs.map((leg) => ({
+        legId: leg.legId,
+        symbol: leg.symbol,
+        side: leg.side,
+        qty: leg.qty,
+        status: leg.status,
+        optionType:
+          leg.optionType ||
+          (leg.symbol.endsWith(String.fromCharCode(67, 69))
+            ? String.fromCharCode(67, 69)
+            : String.fromCharCode(80, 69)),
+        strike: leg.strike || extractStrike(leg.symbol),
+        expiry: leg.expiry,
+        entryPrice: leg.entryPrice,
+        ltp: ltpBySymbol.has(leg.symbol) ? ltpBySymbol.get(leg.symbol) : null,
+        realisedPnl: typeof leg.realisedPnl === 'number' ? leg.realisedPnl : null,
+      })),
+    });
   }
 
   if (reports.length > 0) {
     console.log(reports.join('\n\n'));
+  }
+
+  // --json: one machine-readable line AFTER the human report, so the banner and the payoff chart
+  // share a single run (and a single Angel login).
+  if (process.argv.includes('--json')) {
+    console.log(
+      '@@SNAPSHOT@@' +
+        JSON.stringify({
+          generatedAt: new Date().toISOString(),
+          trades: tradeBook || [],
+          positions: snapshots,
+        }),
+    );
   }
 }
 

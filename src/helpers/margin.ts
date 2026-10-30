@@ -33,7 +33,7 @@ export async function fetchMarginUtilized(jwtToken: string): Promise<number> {
 }
 
 export interface PositionMarginLegParam {
-  exchange: 'NFO' | 'BFO';
+  exchange: 'NFO' | 'BFO' | 'MCX';
   token: string;
   qty: number;
   entryPrice: number;

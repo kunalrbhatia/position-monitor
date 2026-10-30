@@ -49,9 +49,10 @@ export function writeMTMLogLine(
   index: string,
   mtm: number,
   now: Date = new Date(),
+  suffix = '',
 ): void {
   const { dateStr, timeStr, ymd } = formatISTLogDate(now);
-  const line = `[${dateStr}, ${timeStr}] [INFO] ${index}: MTM = ${mtm.toFixed(2)}\n`;
+  const line = `[${dateStr}, ${timeStr}] [INFO] ${index}: MTM = ${mtm.toFixed(2)}${suffix}\n`;
 
   if (!fs.existsSync(env.MTM_LOG_DIR)) {
     fs.mkdirSync(env.MTM_LOG_DIR, { recursive: true });
@@ -63,7 +64,7 @@ export function writeMTMLogLine(
   fs.appendFileSync(filePath, line, 'utf-8');
 }
 
-import { calculatePositionMTM } from '../helpers/mtm.js';
+import { calculatePositionMTM, realisedPnlOf } from '../helpers/mtm.js';
 
 export function runMTMLogger(now: Date = new Date()): void {
   const openPositions = positionStore.getPositions();
@@ -75,7 +76,12 @@ export function runMTMLogger(now: Date = new Date()): void {
     if (positionStore.hasFreshTickSinceLastCheck(posId)) {
       const { totalMTM, hasAllLTPs } = calculatePositionMTM(pos, ltpCache);
       if (hasAllLTPs) {
-        writeMTMLogLine(posId, pos.index, totalMTM, now);
+        const realised = realisedPnlOf(pos);
+        const suffix =
+          Math.abs(realised) >= 0.005
+            ? ` (net incl. realised ${realised >= 0 ? '+' : ''}${realised.toFixed(0)})`
+            : '';
+        writeMTMLogLine(posId, pos.index, totalMTM, now, suffix);
         positionStore.resetFreshTickFlag(posId);
       }
     }
