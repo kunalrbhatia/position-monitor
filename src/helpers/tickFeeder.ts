@@ -271,6 +271,11 @@ export async function connectWebSocket(): Promise<void> {
   const ws = new WebSocket(env.FEEDER_WS_URL, {
     headers: {
       Authorization: `Bearer ${session.jwtToken}`,
+      // SmartStream requires ALL FOUR headers. With only Authorization + x-feed-token the socket
+      // opens and is immediately closed with code 1005 — that is what kept this feed dead for
+      // weeks (a connect/close loop every 5s, and the health check could never see "zero ticks").
+      'x-api-key': env.API_KEY,
+      'x-client-code': env.CLIENT_CODE,
       'x-feed-token': session.feedToken,
     },
   });
