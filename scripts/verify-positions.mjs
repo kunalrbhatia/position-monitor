@@ -16,7 +16,9 @@ if (!session) throw new Error('login failed');
 let publicIP = '127.0.0.1';
 try {
   publicIP = (await axios.get('https://api.ipify.org', { timeout: 5000 })).data.trim();
-} catch {}
+} catch {
+  // best effort: the public IP is only used for the X-ClientPublicIP header
+}
 const headers = buildCommonHeaders(session.jwtToken, publicIP);
 
 const resp = await axios.get(`${BASE}/rest/secure/angelbroking/order/v1/getPosition`, { headers });
