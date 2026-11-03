@@ -143,6 +143,13 @@ describe('Realised-aware MTM (closed legs must not vanish from the P&L)', () => 
     expect(realisedPnlOf(makePos([openLeg]))).toBe(0);
   });
 
+  test('realisedPnlOf counts booked P&L on a leg that is still open', () => {
+    // A leg sold in pieces carries booked money and an open quantity at the same time. The
+    // BANKNIFTY 55,500 CE was short 90 with +64,203 already booked against it.
+    const openWithBooked = { ...openLeg, realisedPnl: 64203 };
+    expect(realisedPnlOf(makePos([openWithBooked]))).toBe(64203);
+  });
+
   test('realisedPnlOf sums realisedPnl of closed legs and treats a missing value as 0', () => {
     expect(realisedPnlOf(makePos([openLeg, closedWithRealised, closedWithoutRealised]))).toBe(
       -23643,
