@@ -100,3 +100,12 @@ This file tracks all modifications, additions, and procedures executed in the re
 - **Gate 3 — REST re-price** (`helpers/restQuotes.ts`): the confirmed breach is re-priced leg-by-leg from the broker (300 ms pacing) and must survive. An unpriceable leg returns `null` → **no order**, because a silently missing leg is what manufactures a profit. Vanished breach → artefact logged, confirmation cleared.
 - Deployed by transpiling only the five changed files with esbuild (no `tsc` on this box — two builds have wedged it). Pre-flight: `09:15:01 → blocked`, `10:00 → allowed`; health 200 after restart; `code=1005` count since restart 0.
 - Known open issue: the tick feed still enters a `1005` connect/close loop some time after a session refresh. Exits no longer depend on it (gate 3), but the MTM display does.
+
+---
+
+## 2026-11-03 — Option-chain OI in the snapshot (builder-style payoff chart)
+
+- `pnl_report.js --json` now carries `chainOi: [{strike, callOi, putOi}]` per position: strikes within ±4.5% of spot for that expiry, quotes batched 50 tokens per `market/v1/quote` call with 300 ms pacing. Source master is the full one in `~/banknifty-ironcondor/data/scrip_master.json` (the repo's own file is NIFTY-only); override with `SCRIP_MASTER_FULL_PATH`.
+- OI is decoration — any failure returns `[]` and never fails the report.
+- New renderer on the Hermes host (`nifty_payoff_builder.py`) draws the broker-builder layout: dark theme, OI bars as a sqrt-scaled backdrop anchored to the floor, payoff green above zero / red below, ±1SD/±2SD from the ATM straddle, and a stats header (profit left, loss left, max profit, max loss, expiry breakevens).
+- `calendar_pnl.sh` points `CHART=` at the new renderer; the 11:47 run produced the first builder-style card.
