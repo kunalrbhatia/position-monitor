@@ -452,7 +452,10 @@ async function main() {
         legDetails,
         deltaInfo,
         position.legs
-          .filter((l) => l.status !== 'OPEN' && typeof l.realisedPnl === 'number')
+          // Booked P&L counts even when the leg still has an open quantity — a leg traded in
+          // pieces carries both. Filtering on status here understated the BANKNIFTY book by
+          // ~₹64k (the 55,500 CE's booked money while it was still short).
+          .filter((l) => typeof l.realisedPnl === 'number')
           .reduce((s, l) => s + l.realisedPnl, 0),
       ),
     );

@@ -14,11 +14,12 @@ export function calculateLegMTM(leg: Leg, currentLTP: number): number {
 
 /** Realised rupees already banked on legs that were closed earlier in this position. */
 export function realisedPnlOf(position: Position): number {
+  // Booked P&L is booked whether or not the leg is still open. A leg that has been traded in
+  // pieces (sold 90, bought back 30, re-sold 30) carries booked money AND an open quantity, and
+  // dropping the booked part understated the position by lakhs (BANKNIFTY 03-Nov: +64,203 booked
+  // on the 55,500 CE while it was still short 90).
   return position.legs.reduce(
-    (sum, leg) =>
-      leg.status === 'OPEN'
-        ? sum
-        : sum + (typeof leg.realisedPnl === 'number' ? leg.realisedPnl : 0),
+    (sum, leg) => sum + (typeof leg.realisedPnl === 'number' ? leg.realisedPnl : 0),
     0,
   );
 }
