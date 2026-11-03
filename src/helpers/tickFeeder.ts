@@ -331,8 +331,19 @@ export async function connectWebSocket(): Promise<void> {
 
     if (heartbeatInterval) clearInterval(heartbeatInterval);
 
-    // Re-login if unauthorized
-    if (code === 4401 || code === 4001 || reasonStr.includes('unauthorized')) {
+    // Re-login if unauthorized — and also when the socket keeps dying for any other reason.
+    // Angel revokes the previous session's feed token whenever another process logs in on the
+    // same client code (our own P&L cron does exactly that every two hours), and a revoked feed
+    // token arrives as a bare 1005 with no reason. Retrying with the cached token then produces
+    // an endless 1005 loop — the feed looks "connected" in logs while delivering no ticks at all.
+    // Three consecutive closes means the cached session is dead: drop it so the next attempt
+    // does a real login.
+    if (
+      code === 4401 ||
+      code === 4001 ||
+      reasonStr.includes('unauthorized') ||
+      consecutiveCloseCount >= 3
+    ) {
       resetBrokerAuthSession();
     }
 
