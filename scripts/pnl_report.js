@@ -170,6 +170,98 @@ async function fetchLTP(jwtToken, publicIP, exchange, symbol, token, retries = 2
   }
 }
 
+// ---------- Option-chain open interest (for the builder-style chart) ----------
+// The repo's own master is NIFTY-only, so the full master from the iron-condor repo is used when
+// present. OI is decoration for the chart: any failure returns [] and never fails the report.
+const FULL_MASTER_CANDIDATES = [
+  process.env.SCRIP_MASTER_FULL_PATH,
+  '/home/ubuntu/banknifty-ironcondor/data/scrip_master.json',
+  '/home/ubuntu/niftyicifalgo/scrip_master.json',
+].filter(Boolean);
+
+let fullMasterCache = null;
+function loadFullMaster() {
+  if (fullMasterCache) return fullMasterCache;
+  for (const candidate of FULL_MASTER_CANDIDATES) {
+    try {
+      fullMasterCache = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      return fullMasterCache;
+    } catch {
+      // try the next candidate
+    }
+  }
+  fullMasterCache = [];
+  return fullMasterCache;
+}
+
+async function fetchChainOi(jwtToken, publicIP, index, expiry, spot, bandPct = 0.045) {
+  if (!expiry || !spot || spot <= 0) return [];
+  const master = loadFullMaster();
+  if (!Array.isArray(master) || master.length === 0) return [];
+
+  const band = spot * bandPct;
+  const byStrike = new Map();
+  for (const row of master) {
+    if (String(row.name) !== index) continue;
+    if (String(row.exch_seg) !== 'NFO') continue;
+    if (String(row.instrumenttype) !== 'OPTIDX') continue;
+    if (String(row.expiry) !== String(expiry)) continue;
+    const strike = Math.round(Number(row.strike) / 100);
+    if (!Number.isFinite(strike) || Math.abs(strike - spot) > band) continue;
+    const isCall = String(row.symbol).endsWith('CE');
+    const entry = byStrike.get(strike) || { strike, callToken: null, putToken: null };
+    if (isCall) entry.callToken = row.token;
+    else entry.putToken = row.token;
+    byStrike.set(strike, entry);
+  }
+  if (byStrike.size === 0) return [];
+
+  const tokens = [];
+  for (const entry of byStrike.values()) {
+    if (entry.callToken) tokens.push(entry.callToken);
+    if (entry.putToken) tokens.push(entry.putToken);
+  }
+
+  const oiByToken = new Map();
+  for (let i = 0; i < tokens.length; i += 50) {
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/rest/secure/angelbroking/market/v1/quote`,
+        { mode: 'FULL', exchangeTokens: { NFO: tokens.slice(i, i + 50) } },
+        {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-UserType': 'USER',
+            'X-SourceID': 'WEB',
+            'X-ClientLocalIP': '127.0.0.1',
+            'X-ClientPublicIP': publicIP,
+            'X-MACAddress': '02:00:00:00:00:00',
+            'X-PrivateKey': process.env.API_KEY || process.env.ANGEL_API_KEY,
+          },
+          timeout: 15000,
+        },
+      );
+      for (const fetched of res.data?.data?.fetched || []) {
+        oiByToken.set(String(fetched.symbolToken), Number(fetched.opnInterest) || 0);
+      }
+    } catch {
+      // OI is best effort
+    }
+    await sleep(300);
+  }
+
+  return [...byStrike.values()]
+    .map((entry) => ({
+      strike: entry.strike,
+      callOi: entry.callToken ? oiByToken.get(String(entry.callToken)) || 0 : 0,
+      putOi: entry.putToken ? oiByToken.get(String(entry.putToken)) || 0 : 0,
+    }))
+    .filter((entry) => entry.callOi > 0 || entry.putOi > 0)
+    .sort((a, b) => a.strike - b.strike);
+}
+
 // ---------- Greeks (Black-Scholes) ----------
 // Today"s fills — the only place an EXIT price exists: exitExecutor flips a leg to CLOSED without
 // recording what it filled at. Angel scopes this to the current day, so the ledger accumulates it.
@@ -452,7 +544,10 @@ async function main() {
         legDetails,
         deltaInfo,
         position.legs
-          .filter((l) => l.status !== 'OPEN' && typeof l.realisedPnl === 'number')
+          // Booked P&L counts even when the leg still has an open quantity — a leg traded in
+          // pieces carries both. Filtering on status here understated the BANKNIFTY book by
+          // ~₹64k (the 55,500 CE's booked money while it was still short).
+          .filter((l) => typeof l.realisedPnl === 'number')
           .reduce((s, l) => s + l.realisedPnl, 0),
       ),
     );
@@ -460,12 +555,20 @@ async function main() {
     // Machine-readable snapshot for the payoff chart and the realisation ledger. One login, so
     // Angel sees one run not two. ALL legs, not just open ones — closed legs are the book history.
     const ltpBySymbol = new Map(legDetails.map((d) => [d.symbol, d.ltp]));
+    const chainOi = await fetchChainOi(
+      jwtToken,
+      publicIP,
+      position.index,
+      openLegs[0]?.expiry || null,
+      deltaInfo ? deltaInfo.spot : null,
+    );
     snapshots.push({
       positionId: position.positionId,
       index: position.index,
       status: position.status,
       expiry: openLegs[0]?.expiry || null,
       spot: deltaInfo ? deltaInfo.spot : null,
+      chainOi,
       legs: position.legs.map((leg) => ({
         legId: leg.legId,
         symbol: leg.symbol,
