@@ -89,3 +89,14 @@ This file tracks all modifications, additions, and procedures executed in the re
 - Rationale: the exit path fires on **net**; leading with the open mark (₹38,984 vs ₹15,341 on the BANKNIFTY fly) made the card read as if the target were close when it was not.
 - Positions with no realised P&L are unchanged — they still print a single `💰 Total PnL` line.
 - Verified both paths on live data (BANKNIFTY = realised, NIFTY BF = none).
+
+---
+
+## 2026-11-03 — Three gates before any exit order (NIFTY BF liquidated at 09:15:01)
+
+- **Incident**: the watcher exited the NIFTY broken-wing butterfly 1s after the open. Bad print on the 260-lot short leg → MTM 1,788.80 became 13,761.80 against PT 11,300 → market orders → realised **−₹7,053.80** on a position that was never in profit. Implied short-leg tick ≈ 490 vs a true 570; that single tick was worth ₹20,816.
+- **Gate 1 — open blackout** (`helpers/marketClock.ts`, `EXIT_BLACKOUT_UNTIL`, default `09:30` IST): enforced inside `executePositionExit`, so every path (watcher, server loop, manual endpoint) is covered. `00:00` disables. One alert per position per day.
+- **Gate 2 — two-pass confirmation** (`jobs/positionWatcher.ts`): a breach must appear on two consecutive scans. Previously a single scan could fire; only the `server.ts` loop had this guard.
+- **Gate 3 — REST re-price** (`helpers/restQuotes.ts`): the confirmed breach is re-priced leg-by-leg from the broker (300 ms pacing) and must survive. An unpriceable leg returns `null` → **no order**, because a silently missing leg is what manufactures a profit. Vanished breach → artefact logged, confirmation cleared.
+- Deployed by transpiling only the five changed files with esbuild (no `tsc` on this box — two builds have wedged it). Pre-flight: `09:15:01 → blocked`, `10:00 → allowed`; health 200 after restart; `code=1005` count since restart 0.
+- Known open issue: the tick feed still enters a `1005` connect/close loop some time after a session refresh. Exits no longer depend on it (gate 3), but the MTM display does.
