@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { modeManager } from '../src/helpers/modeManager.js';
 import { positionStore } from '../src/store/index.js';
-import { runPositionWatcher } from '../src/jobs/positionWatcher.js';
+import { runPositionWatcher, resetBreachConfirmation } from '../src/jobs/positionWatcher.js';
 import { formatISTLogDate, writeMTMLogLine, runMTMLogger } from '../src/jobs/mtmLogger.js';
 import { executePositionExit, executeCombinedExit } from '../src/jobs/exitExecutor.js';
 import { checkStaleTicks } from '../src/main.js';
@@ -16,7 +16,13 @@ describe('Jobs & Integration Coverage Tests', () => {
   const tempLogs = path.join(process.cwd(), 'temp_test_logs');
 
   beforeAll(() => {
-    Object.assign(env, { POSITIONS_DIR: tempDir, MTM_LOG_DIR: tempLogs });
+    Object.assign(env, {
+      POSITIONS_DIR: tempDir,
+      MTM_LOG_DIR: tempLogs,
+      // The open blackout would otherwise refuse every exit between 00:00 and 09:30 IST,
+      // which is exactly when CI runs.
+      EXIT_BLACKOUT_UNTIL: '00:00',
+    });
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     if (!fs.existsSync(tempLogs)) fs.mkdirSync(tempLogs, { recursive: true });
   });
@@ -68,8 +74,16 @@ describe('Jobs & Integration Coverage Tests', () => {
     fs.writeFileSync(path.join(tempDir, 'watcher-pos-1.json'), JSON.stringify(validPos));
     fs.writeFileSync(path.join(tempDir, 'invalid.json'), 'invalid json');
 
+    resetBreachConfirmation();
     positionStore.setPosition(validPos);
     positionStore.updateTick('99001', 200); // MTM +6500 > 1.5% of 100k (1500)
+
+    // Pass 1 only records the breach; pass 2 confirms it and exits. A single sighting of a
+    // threshold must never place an order (03 Nov: one bad opening tick liquidated a position).
+    await runPositionWatcher();
+    expect(
+      JSON.parse(fs.readFileSync(path.join(tempDir, 'watcher-pos-1.json'), 'utf-8')).status,
+    ).toBe('OPEN');
 
     await runPositionWatcher();
     const watcherFileContent = JSON.parse(
