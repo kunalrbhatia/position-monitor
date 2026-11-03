@@ -30,6 +30,9 @@ const envSchema = z.object({
   SCRIP_MASTER_PATH: z.string().default('/home/ubuntu/niftyicifalgo/scrip_master.json'),
   EXIT_RETRY_COOLDOWN_MS: z.coerce.number().default(300000),
   EXIT_MAX_ATTEMPTS_PER_DAY: z.coerce.number().default(5),
+  // No threshold-driven exit may fire before this IST time. Opening prints are unreliable; see
+  // helpers/marketClock.ts for the incident that motivated it. "00:00" disables the blackout.
+  EXIT_BLACKOUT_UNTIL: z.string().default('09:30'),
   RATE_LIMIT_BACKOFF_MS: z.coerce.number().default(900000),
 });
 

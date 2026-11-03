@@ -8,6 +8,10 @@ import { placeBrokerExitOrder, OrderPayload } from '../helpers/api.js';
 import { notifyAlert } from '../alerts/notifier.js';
 import { writeMTMLogLine } from './mtmLogger.js';
 import { env } from '../config/env.js';
+import { isInOpenBlackout } from '../helpers/marketClock.js';
+
+/** One blackout notice per position per day — the watcher re-checks every minute. */
+const blackoutNoticeDay = new Map<string, string>();
 
 function getISTDateString(d = new Date()): string {
   const utc = d.getTime() + d.getTimezoneOffset() * 60000;
@@ -29,6 +33,20 @@ export async function executePositionExit(
 
   if (modeManager.isKillMode()) {
     notifyAlert(`[${posId}] .kill switch is ACTIVE! Exit order placement BLOCKED.`);
+    return { success: false, closedLegs: [], failedLegs: position.legs.map((l) => l.legId) };
+  }
+
+  // Open blackout: the first minutes of the session print unreliable option prices. Gate here, at
+  // the single choke point every exit path goes through, so no caller can bypass it.
+  if (isInOpenBlackout()) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (blackoutNoticeDay.get(posId) !== today) {
+      blackoutNoticeDay.set(posId, today);
+      notifyAlert(
+        `[${posId}] Exit BLOCKED — inside the open blackout (before ${env.EXIT_BLACKOUT_UNTIL} IST). ` +
+          `Reason ${reason}, MTM ₹${currentMTM.toFixed(2)}. Waiting for the market to settle.`,
+      );
+    }
     return { success: false, closedLegs: [], failedLegs: position.legs.map((l) => l.legId) };
   }
 
